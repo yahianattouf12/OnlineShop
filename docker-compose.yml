@@ -1,14 +1,14 @@
 services:
-  app_db:
+  app-db:
     image: postgres:17
     environment:
-      POSTGRES_DB: DB_OnlineShop
+      POSTGRES_DB: db_online_shop
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
-      - data:/var/lib/postgresql/data
+      - app-db-data:/var/lib/postgresql/data
 
 volumes:
-  data:
+  app-db-data:
