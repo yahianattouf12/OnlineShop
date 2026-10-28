@@ -31,7 +31,11 @@ public class AdminSeeder : IHostedService
         // UsersService uses the DbContext, which lives per request (scoped), so make a scope for it.
         await using var scope = _services.CreateAsyncScope();
         var usersService = scope.ServiceProvider.GetRequiredService<UsersService>();
-        await usersService.EnsureAdminAsync(email, password, ct);
+
+        // Log instead of crashing: the rest of the app still works without an admin.
+        if (!await usersService.EnsureAdminAsync(email, password, ct))
+            _logger.LogError("Admin:Email {Email} is already used by a customer account, so no admin was created. " +
+                "Set Admin:Email to an address that is not registered.", email);
     }
 
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
