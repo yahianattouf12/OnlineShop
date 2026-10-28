@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Shop.Api.Common;
 using Shop.Api.Common.Auth;
+using Shop.Api.Common.Security;
 using Shop.Api.Modules.Users.Dtos;
 
 namespace Shop.Api.Modules.Users;
@@ -30,6 +32,7 @@ public class AuthController : ControllerBase
 
     /// <summary>Returns a JWT. Send it as "Authorization: Bearer {token}".</summary>
     [HttpPost("login")]
+    [EnableRateLimiting(RateLimitingSetup.LoginPolicy)]
     public Task<LoginResponse> Login(LoginRequest request, CancellationToken ct) =>
         _usersService.LoginAsync(request, ct);
 

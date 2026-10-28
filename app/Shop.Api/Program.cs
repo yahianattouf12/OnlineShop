@@ -18,6 +18,7 @@ builder.Services.AddControllers();
 builder.Services.AddApiDocs();
 builder.Services.AddApiErrorHandling();
 builder.Services.AddJwtAuth(builder.Configuration);
+builder.Services.AddLoginRateLimiting();
 
 builder.Services.AddNotificationsModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);
@@ -47,6 +48,9 @@ app.UseHttpsRedirection();
 // Authentication (who are you?) must come before Authorization (are you allowed?).
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Limits login attempts (see RateLimitingSetup); runs per endpoint, so after routing and auth.
+app.UseRateLimiter();
 
 app.MapControllers();
 
