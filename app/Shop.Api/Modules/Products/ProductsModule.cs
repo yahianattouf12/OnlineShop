@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Shop.Api.Common.Data;
+using Shop.Api.Common.Storage;
 
 namespace Shop.Api.Modules.Products;
 
@@ -17,6 +19,12 @@ public static class ProductsModule
                         "products");
                 });
         });
+
+        services.AddHostedService<DatabaseMigrator<ProductsDbContext>>();
+        services.AddScoped<ProductsService>();
+
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+        services.AddSingleton<IImageStorage, LocalImageStorage>();
 
         return services;
     }
