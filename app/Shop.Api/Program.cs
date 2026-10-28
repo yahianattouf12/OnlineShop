@@ -1,4 +1,5 @@
 using Shop.Api.Common.Errors;
+using Shop.Api.Common.OpenApi;
 using Shop.Api.Modules.Notifications;
 using Shop.Api.Modules.Orders;
 using Shop.Api.Modules.Products;
@@ -9,8 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddApiDocs();
 builder.Services.AddApiErrorHandling();
 
 builder.Services.AddNotificationsModule(builder.Configuration);
@@ -27,9 +27,10 @@ app.UseExceptionHandler();
 // Empty error responses (401, 403, 404, ...) also get a Problem Details body.
 app.UseStatusCodePages();
 
+// API docs only in Development: in production they would show attackers every endpoint.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseApiDocs();
 }
 
 app.UseHttpsRedirection();
