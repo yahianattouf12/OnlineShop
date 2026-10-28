@@ -28,7 +28,8 @@ public class ProductQuery
     [MaxLength(50)]
     public string? Category { get; set; }
 
-    [Range(1, int.MaxValue)]
+    // Capped so (Page - 1) * PageSize can never overflow an int (it would become a negative OFFSET → 500).
+    [Range(1, 10_000)]
     public int Page { get; set; } = 1;
 
     // An upper limit, so nobody can ask for a million products in one request.
