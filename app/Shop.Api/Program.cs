@@ -1,12 +1,16 @@
 using Shop.Api.Common.Auth;
 using Shop.Api.Common.Errors;
 using Shop.Api.Common.OpenApi;
+using Shop.Api.Common.Security;
 using Shop.Api.Modules.Notifications;
 using Shop.Api.Modules.Orders;
 using Shop.Api.Modules.Products;
 using Shop.Api.Modules.Users;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Do not tell attackers which web server we run (removes the "Server: Kestrel" header).
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
 // Add services to the container.
 
@@ -23,6 +27,9 @@ builder.Services.AddUsersModule(builder.Configuration);
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+
+// Before everything else, so even error responses get the security headers.
+app.UseSecurityHeaders();
 
 // First, so it catches exceptions thrown by everything after it.
 app.UseExceptionHandler();
