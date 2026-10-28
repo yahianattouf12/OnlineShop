@@ -1,3 +1,8 @@
+using Shop.Api.Modules.Notifications;
+using Shop.Api.Modules.Orders;
+using Shop.Api.Modules.Products;
+using Shop.Api.Modules.Users;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -5,6 +10,11 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddNotificationsModule(builder.Configuration);
+builder.Services.AddOrdersModule(builder.Configuration);
+builder.Services.AddProductsModule(builder.Configuration);
+builder.Services.AddUsersModule(builder.Configuration);
 
 var app = builder.Build();
 
