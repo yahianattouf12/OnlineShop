@@ -1,6 +1,7 @@
 using Shop.Api.Common.Auth;
 using Shop.Api.Common.Errors;
 using Shop.Api.Common.OpenApi;
+using Shop.Api.Common.Security;
 using Shop.Api.Modules.Notifications;
 using Shop.Api.Modules.Orders;
 using Shop.Api.Modules.Products;
@@ -14,6 +15,7 @@ builder.Services.AddControllers();
 builder.Services.AddApiDocs();
 builder.Services.AddApiErrorHandling();
 builder.Services.AddJwtAuth(builder.Configuration);
+builder.Services.AddLoginRateLimiting();
 
 builder.Services.AddNotificationsModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);
@@ -40,6 +42,9 @@ app.UseHttpsRedirection();
 // Authentication (who are you?) must come before Authorization (are you allowed?).
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Limits login attempts (see RateLimitingSetup); runs per endpoint, so after routing and auth.
+app.UseRateLimiter();
 
 app.MapControllers();
 
