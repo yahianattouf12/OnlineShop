@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Uploaded product images (stored on disk / a Docker volume, never in Git)
+uploads/
+
 # User-specific files
 *.rsuser
 *.suo
