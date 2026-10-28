@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Shop.Api.Common.Data;
 
 namespace Shop.Api.Modules.Users;
 
@@ -21,6 +22,9 @@ public static class UsersModule
 
         services.AddScoped<UsersService>();
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+
+        // Order matters: hosted services start one after another, so the tables exist before the seeder runs.
+        services.AddHostedService<DatabaseMigrator<UsersDbContext>>();
         services.AddHostedService<AdminSeeder>();
 
         return services;

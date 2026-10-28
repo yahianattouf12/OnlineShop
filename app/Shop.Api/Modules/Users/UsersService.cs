@@ -9,6 +9,10 @@ namespace Shop.Api.Modules.Users;
 
 public class UsersService
 {
+    // A real hash of a random password, checked when the email is unknown (see LoginAsync).
+    private static readonly string DummyPasswordHash =
+        new PasswordHasher<User>().HashPassword(new User(), Guid.NewGuid().ToString());
+
     private readonly UsersDbContext _db;
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly JwtTokenService _tokenService;
@@ -29,9 +33,13 @@ public class UsersService
         var email = NormalizeEmail(request.Email);
         var user = await _db.Users.SingleOrDefaultAsync(u => u.Email == email, ct);
 
+        // Verify a password even when the email is unknown, so both cases take the same time.
+        // Otherwise a fast "401" would reveal that the email is not registered (timing attack).
+        var result = _passwordHasher.VerifyHashedPassword(
+            user ?? new User(), user?.PasswordHash ?? DummyPasswordHash, request.Password);
+
         // Same answer for "no such email" and "wrong password", so nobody can find out which emails are registered.
-        if (user is null ||
-            _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
+        if (user is null || result == PasswordVerificationResult.Failed)
         {
             throw new UnauthorizedException("Invalid email or password.");
         }
@@ -53,13 +61,23 @@ public class UsersService
         return users.Select(ToResponse).ToList();
     }
 
-    /// <summary>Creates the admin account from configuration if there is no admin yet. Called at startup.</summary>
-    public async Task EnsureAdminAsync(string email, string password, CancellationToken ct)
+    /// <summary>
+    /// Creates the admin account from configuration if there is no admin yet. Called at startup.
+    /// Returns false if the email already belongs to a customer.
+    /// </summary>
+    public async Task<bool> EnsureAdminAsync(string email, string password, CancellationToken ct)
     {
         if (await _db.Users.AnyAsync(u => u.Role == Roles.Admin, ct))
-            return;
+            return true;
+
+        // Never promote an existing account: anyone could have registered this email first,
+        // and promoting it would hand them admin rights with their own password.
+        var normalizedEmail = NormalizeEmail(email);
+        if (await _db.Users.AnyAsync(u => u.Email == normalizedEmail, ct))
+            return false;
 
         await CreateUserAsync(email, password, Roles.Admin, ct);
+        return true;
     }
 
     private async Task<UserResponse> CreateUserAsync(string rawEmail, string password, string role, CancellationToken ct)
