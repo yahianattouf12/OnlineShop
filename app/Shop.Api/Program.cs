@@ -1,3 +1,4 @@
+using Shop.Api.Common.Auth;
 using Shop.Api.Common.Errors;
 using Shop.Api.Common.OpenApi;
 using Shop.Api.Modules.Notifications;
@@ -12,6 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddApiDocs();
 builder.Services.AddApiErrorHandling();
+builder.Services.AddJwtAuth(builder.Configuration);
 
 builder.Services.AddNotificationsModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);
@@ -35,6 +37,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Authentication (who are you?) must come before Authorization (are you allowed?).
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
