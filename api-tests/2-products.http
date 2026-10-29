@@ -1,0 +1,229 @@
+# 2. Products: add a product with its image (admin only), list, filter by category, pagination.
+#
+# VS Code "REST Client" extension: click "Send Request" above each request.
+# Send TOP TO BOTTOM the first time: later requests reuse the responses of earlier ones.
+# This file logs in 2 times (login is limited to 5 per minute; on 429 wait a minute).
+# The admin login is read from api-tests/.env (ADMIN_EMAIL, ADMIN_PASSWORD), which git ignores.
+
+@baseUrl = http://localhost:8080
+@api = {{baseUrl}}/api/v1
+@adminEmail = {{$dotenv ADMIN_EMAIL}}
+@adminPassword = {{$dotenv ADMIN_PASSWORD}}
+
+
+###############################################################################
+# Setup: an admin and a customer
+###############################################################################
+
+### Login admin → 200
+# @name loginAdmin
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### Register a customer → 201
+# @name registerCustomer
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "customer.{{$timestamp}}@shop.test",
+  "password": "Passw0rd!"
+}
+
+### Login the customer → 200
+# @name loginCustomer
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{registerCustomer.response.body.$.email}}",
+  "password": "Passw0rd!"
+}
+
+
+###############################################################################
+# Add products (multipart/form-data, because of the image)
+###############################################################################
+
+### Add product without a token → 401
+POST {{api}}/products
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Phone X
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+199.99
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Phones
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+### Add product as customer → 403 (admin only)
+POST {{api}}/products
+Authorization: Bearer {{loginCustomer.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Phone X
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+199.99
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Phones
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+### Add product with a fake image → 422
+# not-an-image.png is a text file renamed to .png. The server checks the file's first bytes, not its name.
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Phone X
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+199.99
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Phones
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="not-an-image.png"
+Content-Type: image/png
+
+< ./not-an-image.png
+--ShopBoundary--
+
+### Add product with invalid fields (empty name, negative price) → 422
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+-5
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Phones
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+### Add product 1 (Phones) as admin → 201
+# @name product1
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Phone X
+--ShopBoundary
+Content-Disposition: form-data; name="description"
+
+A demo phone
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+199.99
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Phones
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+### Add product 2 (Accessories) as admin → 201
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Phone case
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+15.50
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Accessories
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+
+###############################################################################
+# View products (public, no token needed)
+###############################################################################
+
+### List products → 200, newest first, with paging metadata
+GET {{api}}/products
+
+### Filter by category (case-insensitive) → 200, only "phones"
+GET {{api}}/products?category=PHONES
+
+### Pagination: page 2 with 1 item per page → 200
+GET {{api}}/products?page=2&pageSize=1
+
+### Pagination: pageSize over the limit (max 50) → 422
+GET {{api}}/products?pageSize=1000
+
+### Pagination: huge page number → 422 (no crash)
+GET {{api}}/products?page=50000000&pageSize=50
+
+### Get product 1 → 200
+GET {{api}}/products/{{product1.response.body.$.id}}
+
+### Get product 1's image → 200, Content-Type: image/png
+GET {{api}}/products/{{product1.response.body.$.id}}/image
+
+### Product that does not exist → 404
+GET {{api}}/products/00000000-0000-0000-0000-000000000001

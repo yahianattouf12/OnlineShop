@@ -1,0 +1,96 @@
+# 1. Users & JWT: registration, login, two roles (Customer, Admin).
+#
+# VS Code "REST Client" extension: click "Send Request" above each request.
+# Send TOP TO BOTTOM the first time: later requests reuse the responses of earlier ones,
+# e.g. "loginA.response.body.$.accessToken" is the token from the request named loginA.
+# This file logs in 2 times (login is limited to 5 per minute; on 429 wait a minute).
+# The admin login is read from api-tests/.env (ADMIN_EMAIL, ADMIN_PASSWORD), which git ignores.
+
+@baseUrl = http://localhost:8080
+@api = {{baseUrl}}/api/v1
+@adminEmail = {{$dotenv ADMIN_EMAIL}}
+@adminPassword = {{$dotenv ADMIN_PASSWORD}}
+
+
+### Register customer A → 201 (role: Customer, Location header)
+# @name registerA
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "customer.a.{{$timestamp}}@shop.test",
+  "password": "Passw0rd!"
+}
+
+### Register customer B, trying to make itself Admin → 201, still "role": "Customer"
+# Mass assignment: the extra "role" field is ignored, so nobody can register as an admin.
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "customer.b.{{$timestamp}}@shop.test",
+  "password": "Passw0rd!",
+  "role": "Admin"
+}
+
+### Register with an email that already exists → 409 Conflict
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{registerA.response.body.$.email}}",
+  "password": "Passw0rd!"
+}
+
+### Register with invalid input → 422, each field listed under "errors"
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "not-an-email",
+  "password": "123"
+}
+
+### Login customer A → 200 + JWT
+# @name loginA
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{registerA.response.body.$.email}}",
+  "password": "Passw0rd!"
+}
+
+### Login admin → 200 + JWT with "role": "Admin"
+# The admin is created at startup from .env. No API can create an admin.
+# @name loginAdmin
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### Who am I (customer A) → 200
+GET {{api}}/auth/me
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Who am I without a token → 401
+GET {{api}}/auth/me
+
+### Garbage token → 401
+GET {{api}}/auth/me
+Authorization: Bearer this.is.not-a-real-token
+
+### List users as customer → 403 (admin only)
+GET {{api}}/users
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### List users as admin → 200
+GET {{api}}/users
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### Get one user as admin → 200
+GET {{api}}/users/{{registerA.response.body.$.id}}
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
