@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Shop.Api.Common.Auth;
 using Shop.Api.Common.Errors;
 using Shop.Api.Common.Paging;
+using Shop.Api.Modules.Notifications.Contracts;
 using Shop.Api.Modules.Orders.Dtos;
 using Shop.Api.Modules.Products.Contracts;
 
@@ -11,13 +12,20 @@ public class OrdersService
 {
     private readonly OrdersDbContext _db;
     private readonly IProductCatalog _productCatalog; // the Products module's public door, NOT ProductsDbContext
+    private readonly INotificationService _notifications; // the Notifications module's public door
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<OrdersService> _logger;
 
-    public OrdersService(OrdersDbContext db, IProductCatalog productCatalog, ICurrentUser currentUser, ILogger<OrdersService> logger)
+    public OrdersService(
+        OrdersDbContext db,
+        IProductCatalog productCatalog,
+        INotificationService notifications,
+        ICurrentUser currentUser,
+        ILogger<OrdersService> logger)
     {
         _db = db;
         _productCatalog = productCatalog;
+        _notifications = notifications;
         _currentUser = currentUser;
         _logger = logger;
     }
@@ -74,6 +82,10 @@ public class OrdersService
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation("Order {OrderId} created by user {UserId}, total {Total}", order.Id, userId, order.TotalAmount);
+
+        // 6. Tell the customer. Only after the order is safely saved.
+        await TryNotifyAsync(userId, $"We received your order {ShortId(order.Id)} (total {order.TotalAmount:0.00}).", order.Id);
+
         return ToResponse(order);
     }
 
@@ -147,6 +159,10 @@ public class OrdersService
         }
 
         _logger.LogInformation("Order {OrderId} moved to {Status} by admin {AdminId}", order.Id, newStatus, _currentUser.Id);
+
+        // The notification goes to the order's owner (order.UserId), not to the admin who changed it.
+        await TryNotifyAsync(order.UserId, $"Your order {ShortId(order.Id)} is now {newStatus}.", order.Id);
+
         return ToResponse(order);
     }
 
@@ -163,6 +179,26 @@ public class OrdersService
         var userId = _currentUser.Id;
         return orders.Where(o => o.UserId == userId);
     }
+
+    /// <summary>
+    /// Best effort: the order is already saved, so a failed notification must not turn a successful
+    /// order into an error for the customer. We log it instead. (Requirement 4 will make delivery reliable.)
+    /// CancellationToken.None: finish the notification even if the client has already disconnected.
+    /// </summary>
+    private async Task TryNotifyAsync(Guid userId, string message, Guid orderId)
+    {
+        try
+        {
+            await _notifications.NotifyAsync(userId, message, orderId, CancellationToken.None);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Could not notify user {UserId} about order {OrderId}", userId, orderId);
+        }
+    }
+
+    /// <summary>The first 8 characters of the id, enough for a human to recognise the order.</summary>
+    private static string ShortId(Guid id) => id.ToString()[..8];
 
     private static OrderStatusChange NewHistoryEntry(OrderStatus status, DateTime at, Guid byUserId) => new()
     {
