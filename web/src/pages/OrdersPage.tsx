@@ -7,6 +7,21 @@ import { formatDateTime, formatMoney, shortId } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 
 const PAGE_SIZE = 10;
+const MAX_THUMBS = 3;
+
+/** Up to three overlapping product images, then "+N" for the rest. */
+function ProductThumbs({ productIds }: { productIds: string[] }) {
+  const shown = productIds.slice(0, MAX_THUMBS);
+  const more = productIds.length - shown.length;
+  return (
+    <div className="thumb-stack" aria-hidden="true">
+      {shown.map((id) => (
+        <img key={id} src={`/api/v1/products/${id}/image`} alt="" loading="lazy" />
+      ))}
+      {more > 0 && <span className="thumb-more">+{more}</span>}
+    </div>
+  );
+}
 
 /** "My orders" for a customer, "Orders" (everyone's) for the admin: the API decides what each one sees. */
 export function OrdersPage({ admin = false }: { admin?: boolean }) {
@@ -79,7 +94,7 @@ export function OrdersPage({ admin = false }: { admin?: boolean }) {
                   <th>Order</th>
                   {admin && <th>Customer</th>}
                   <th>Placed</th>
-                  <th className="num">Items</th>
+                  <th>Items</th>
                   <th className="num">Total</th>
                   <th>Status</th>
                 </tr>
@@ -96,7 +111,14 @@ export function OrdersPage({ admin = false }: { admin?: boolean }) {
                     <td className="muted" style={{ whiteSpace: 'nowrap' }}>
                       {formatDateTime(o.createdAt)}
                     </td>
-                    <td className="num">{o.itemCount}</td>
+                    <td>
+                      <div className="row gap-sm" style={{ flexWrap: 'nowrap' }}>
+                        <ProductThumbs productIds={o.productIds} />
+                        <span className="muted" style={{ whiteSpace: 'nowrap' }}>
+                          {o.itemCount} {o.itemCount === 1 ? 'item' : 'items'}
+                        </span>
+                      </div>
+                    </td>
                     <td className="num strong">{formatMoney(o.totalAmount)}</td>
                     <td>
                       <StatusBadge status={o.status} />

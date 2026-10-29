@@ -61,6 +61,7 @@ export interface OrderSummary {
   status: OrderStatus;
   totalAmount: number;
   itemCount: number;
+  productIds: string[];
   createdAt: string;
 }
 

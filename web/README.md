@@ -55,4 +55,7 @@ src/
 
 Built on the team design system: a monochrome palette (ink `#141414` on white, light grey tints for structure),
 pill-shaped controls, no shadows, and Inter (the documented substitute for Saans) with 650-weight headings that
-end with a period. The system has no red/green state colors, so errors use the inverted ink style.
+end with a period. The one addition is red for errors (`--color-error*` in `tokens.css`): invalid field
+outlines, field messages, error notices and failed security checks, so a problem stands out from normal content.
+Order status badges are color-coded too (`--color-status-*`): pending amber, confirmed blue, shipped purple,
+delivered green, cancelled red, each as strong text on a translucent tint.

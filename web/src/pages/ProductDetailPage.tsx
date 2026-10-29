@@ -50,7 +50,7 @@ export function ProductDetailPage() {
       toast(`An order can hold up to ${MAX_LINES} different products.`);
       return;
     }
-    toast(`Added ${quantity} × ${p.name} to your cart.`);
+    toast(`Added ${quantity} × ${p.name} to your cart.`, { label: 'View cart', to: '/cart' });
     setQuantity(1);
   };
 
@@ -99,8 +99,9 @@ export function ProductDetailPage() {
                     <span className="muted">
                       {inCart} already in your cart.
                     </span>
-                    <Link to="/cart" className="text-link">
-                      Go to cart
+                    <Link to="/cart" className="btn btn-outline">
+                      <Icon name="bag" size={16} />
+                      View cart
                     </Link>
                   </div>
                 )}
