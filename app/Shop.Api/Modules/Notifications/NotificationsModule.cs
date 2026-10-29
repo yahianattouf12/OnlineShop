@@ -26,7 +26,8 @@ public static class NotificationsModule
         // One object per request, reachable two ways: as itself (for the controller)
         // and as the public INotificationService (for other modules).
         services.AddScoped<NotificationService>();
-        //! i should review this .. what if there isn't a notification service? i should ask claude ai about it 
+        // The interface points to that same per-request object instead of creating a second one.
+        // GetRequiredService always finds it, because it is registered on the line above.
         services.AddScoped<INotificationService>(sp => sp.GetRequiredService<NotificationService>());
 
         return services;
