@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Shop.Api.Common.Data;
 
 namespace Shop.Api.Modules.Orders;
 
@@ -17,6 +18,9 @@ public static class OrdersModule
                         "orders");
                 });
         });
+
+        services.AddHostedService<DatabaseMigrator<OrdersDbContext>>();
+        services.AddScoped<OrdersService>();
 
         return services;
     }
