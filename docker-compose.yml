@@ -45,6 +45,22 @@ services:
       timeout: 3s
       retries: 10
 
+  # Optional: adds the demo catalog (12 products with images) through the API.
+  # Not started by "docker compose up"; run it with:  docker compose --profile seed run --rm seed
+  seed:
+    image: node:22-alpine
+    profiles: ["seed"]
+    working_dir: /seed
+    volumes:
+      - ./seed:/seed:ro
+    environment:
+      API_URL: http://app:8080
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    command: ["node", "seed.mjs"]
+    depends_on:
+      - app
+
 volumes:
   app-db-data:
   uploads:

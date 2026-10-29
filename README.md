@@ -26,6 +26,7 @@ app/Shop.Api/
 └── Program.cs
 web/                   the website (see web/README.md)
 api-tests/             ready API requests (.http + Postman) for Requirement 1
+seed/                  demo catalog: products.json, images/, seed.mjs
 inventory/             inventory service (Requirement 2)
 proto/                 gRPC contract shared by both services (Requirement 2)
 docker-compose.yml
@@ -48,6 +49,14 @@ docker compose up --build
 - Three separate containers: `web` (the website), `app` (the API) and `app-db` (PostgreSQL)
 - Tables are created automatically on startup, and the admin account comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 - Product images are kept in the `uploads` volume, so they survive restarts
+
+**Demo products (optional):** fill an empty shop with 12 products and their images, added through the API as the admin:
+
+```bash
+docker compose --profile seed run --rm seed
+```
+
+It is safe to run again (existing products are skipped). For a completely clean start: `docker compose down -v` (deletes all local data), `docker compose up -d`, then seed.
 
 
 ## Run it locally (for development)
