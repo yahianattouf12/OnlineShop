@@ -13,9 +13,10 @@ Ready requests that cover everything in Requirement 1, in two forms:
 | `1-users-auth.http` | Register, login (JWT), the two roles |
 | `2-products.http` | Add a product with its image, list, filter by category, pagination |
 | `3-orders.http` | Create, view, change status, and the **two proofs** (⭐) |
-| `4-rate-limit.http` | Brute-force protection on login (429) |
+| `4-notifications.http` | Notified on order and status change, own notifications only (⭐), unread count, mark as read |
+| `5-rate-limit.http` | Brute-force protection on login (429) |
 | `.env.example` | Template for `.env`: the admin login that the `.http` files read |
-| `OnlineShop-R1.postman_collection.json` | All the requests for Postman, in 5 folders, with checks |
+| `OnlineShop-R1.postman_collection.json` | All the requests for Postman, in 6 folders, with checks |
 | `OnlineShop-local.postman_environment.example.json` | Template for the Postman environment: `baseUrl` and the admin login |
 | `product.png` | A real image for adding products |
 | `not-an-image.png` | A text file renamed to `.png`, to show the upload check |
@@ -39,7 +40,7 @@ Both files below hold the admin password, so git ignores them. Use the same valu
 1. From the project folder: `docker compose up --build -d`
 2. **Postman check:** in VS Code, open the **Postman** extension, import both JSON files, select the **OnlineShop local** environment, and run the whole collection. Everything should be green.
 3. Wait **1 minute**: the collection ends with the rate-limit test on purpose.
-4. **Live demo:** open the `.http` files in order (0 → 4).
+4. **Live demo:** open the `.http` files in order (0 → 5).
 
 Without Postman, the same check from a terminal:
 
@@ -69,7 +70,8 @@ In the Postman collection every request checks its own result. These checks also
 | Orders: create, view, change status | `3-orders.http` |
 | Customer sees only their own orders | `3-orders.http`: ⭐ PROOF 1, and "Customer B lists orders" |
 | Only the admin changes the status | `3-orders.http`: ⭐ PROOF 2 |
-| Login rate limiting | `4-rate-limit.http` |
+| Notifications module | `4-notifications.http` |
+| Login rate limiting | `5-rate-limit.http` |
 
 ## The two proofs the brief asks for
 
@@ -86,6 +88,8 @@ In the Postman collection every request checks its own result. These checks also
 - **Create order with faked owner, total and status** (`3-orders.http`): the server ignores all three. The owner comes from the token and the price from the product.
 - **Add product with a fake image** (`2-products.http`): the server checks the file's first bytes, not its name → `422`.
 - **Admin: Confirmed → Delivered** (`3-orders.http`): skipping a step → `422`, and the response lists the allowed next steps.
+- **Customer B marks A's notification as read** (`4-notifications.http`): `404`, the same owner check as orders. There is also no endpoint that creates a notification, so nobody can send fake ones.
+- **Admin changes the status** (`4-notifications.http`): the order's owner is notified, not the admin.
 - **Forged token** (Postman only): editing the role inside the JWT to `Admin` breaks the signature → `401`.
 
 ## If something fails
