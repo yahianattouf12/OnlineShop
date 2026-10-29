@@ -1,0 +1,30 @@
+# 4. Login rate limiting: brute-force protection, 5 login attempts per minute per IP, then 429.
+#
+# VS Code "REST Client" extension: click "Send Request" above each request.
+# Logins from the other files in the last minute count too, so the 429 may come early.
+# After this file, wait 1 minute before logging in again.
+
+@baseUrl = http://localhost:8080
+@api = {{baseUrl}}/api/v1
+@adminEmail = {{$dotenv ADMIN_EMAIL}}
+@adminPassword = {{$dotenv ADMIN_PASSWORD}}
+
+
+### Brute force: send this several times → 401, 401, ... then 429 with a Retry-After header
+# The 401 says "Invalid email or password." whether the email exists or not.
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "wrong-password"
+}
+
+### Correct password while blocked → still 429 (the limit counts attempts, not failures)
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}

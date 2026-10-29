@@ -1,0 +1,298 @@
+# 3. Orders: create, view, change status.
+#    A customer sees only their own orders; only the admin changes the status.
+#    The two proofs the brief asks for are marked ⭐.
+#
+# VS Code "REST Client" extension: click "Send Request" above each request.
+# Send TOP TO BOTTOM the first time: later requests reuse the responses of earlier ones.
+# This file logs in 3 times (login is limited to 5 per minute; on 429 wait a minute).
+# The admin login is read from api-tests/.env (ADMIN_EMAIL, ADMIN_PASSWORD), which git ignores.
+
+@baseUrl = http://localhost:8080
+@api = {{baseUrl}}/api/v1
+@adminEmail = {{$dotenv ADMIN_EMAIL}}
+@adminPassword = {{$dotenv ADMIN_PASSWORD}}
+
+
+###############################################################################
+# Setup: two customers, the admin, two products
+###############################################################################
+
+### Register customer A → 201
+# @name registerA
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "customer.a.{{$timestamp}}@shop.test",
+  "password": "Passw0rd!"
+}
+
+### Register customer B → 201
+# @name registerB
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "customer.b.{{$timestamp}}@shop.test",
+  "password": "Passw0rd!"
+}
+
+### Login customer A → 200
+# @name loginA
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{registerA.response.body.$.email}}",
+  "password": "Passw0rd!"
+}
+
+### Login customer B → 200
+# @name loginB
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{registerB.response.body.$.email}}",
+  "password": "Passw0rd!"
+}
+
+### Login admin → 200
+# @name loginAdmin
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### Add product 1 (199.99) as admin → 201
+# @name product1
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Phone X
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+199.99
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Phones
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+### Add product 2 (15.50) as admin → 201
+# @name product2
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Phone case
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+15.50
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Accessories
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+
+###############################################################################
+# Create orders
+###############################################################################
+
+### Create order as customer A → 201, total calculated on the server: 2 × 199.99 + 15.50 = 415.48
+# @name orderA
+POST {{api}}/orders
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "{{product1.response.body.$.id}}", "quantity": 2 },
+    { "productId": "{{product2.response.body.$.id}}", "quantity": 1 }
+  ]
+}
+
+### Create order with faked owner, total and status → 201, all three ignored
+# Owner comes from the token, price from the product, and new orders are always Pending.
+POST {{api}}/orders
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "userId": "{{registerB.response.body.$.id}}",
+  "totalAmount": 0.01,
+  "status": "Delivered",
+  "items": [
+    { "productId": "{{product1.response.body.$.id}}", "quantity": 1 }
+  ]
+}
+
+### Create order as customer B → 201
+POST {{api}}/orders
+Authorization: Bearer {{loginB.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "{{product2.response.body.$.id}}", "quantity": 3 }
+  ]
+}
+
+### Create order without a token → 401
+POST {{api}}/orders
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "{{product1.response.body.$.id}}", "quantity": 1 }
+  ]
+}
+
+### Create order as admin → 403 (placing orders is for customers)
+POST {{api}}/orders
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "{{product1.response.body.$.id}}", "quantity": 1 }
+  ]
+}
+
+### Create order with a product that does not exist → 422, "missingProductIds" listed
+POST {{api}}/orders
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "00000000-0000-0000-0000-000000000001", "quantity": 1 }
+  ]
+}
+
+### Create order with no items → 422
+POST {{api}}/orders
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": []
+}
+
+
+###############################################################################
+# View orders: a customer sees only their own
+###############################################################################
+
+### View own order (customer A) → 200, with items and status history
+GET {{api}}/orders/{{orderA.response.body.$.id}}
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### ⭐ PROOF 1: customer B opens customer A's order → 404
+# IDOR / BOLA: B only changed the id in the URL. The query filters by the owner from the token,
+# so for B this order does not exist. 404 (not 403) also hides that it exists at all.
+GET {{api}}/orders/{{orderA.response.body.$.id}}
+Authorization: Bearer {{loginB.response.body.$.accessToken}}
+
+### Customer B lists orders → 200, only B's own orders
+GET {{api}}/orders
+Authorization: Bearer {{loginB.response.body.$.accessToken}}
+
+### Admin lists all orders → 200, orders of both customers
+GET {{api}}/orders
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### Admin views any order → 200
+GET {{api}}/orders/{{orderA.response.body.$.id}}
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+
+###############################################################################
+# Change status: admin only, allowed steps only
+###############################################################################
+
+### ⭐ PROOF 2: customer A changes the status of their own order → 403
+# Only the Admin role can change a status, even the owner cannot.
+PATCH {{api}}/orders/{{orderA.response.body.$.id}}/status
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "status": "Delivered"
+}
+
+### Customer B changes the status of A's order → 403
+PATCH {{api}}/orders/{{orderA.response.body.$.id}}/status
+Authorization: Bearer {{loginB.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "status": "Cancelled"
+}
+
+### Admin: Pending → Confirmed → 200, history shows both steps
+PATCH {{api}}/orders/{{orderA.response.body.$.id}}/status
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "status": "Confirmed"
+}
+
+### Admin: Confirmed → Delivered (skips Shipped) → 422, "allowedNext" listed
+PATCH {{api}}/orders/{{orderA.response.body.$.id}}/status
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "status": "Delivered"
+}
+
+### Admin: unknown status value → 422
+PATCH {{api}}/orders/{{orderA.response.body.$.id}}/status
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "status": "Teleported"
+}
+
+### Admin: order that does not exist → 404
+PATCH {{api}}/orders/00000000-0000-0000-0000-000000000001/status
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "status": "Confirmed"
+}
+
+### Customer A sees the new status (Confirmed) → 200
+GET {{api}}/orders/{{orderA.response.body.$.id}}
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Filter by status: admin lists Confirmed orders → 200
+GET {{api}}/orders?status=Confirmed
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
