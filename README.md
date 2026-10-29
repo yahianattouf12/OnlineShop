@@ -31,7 +31,22 @@ docker-compose.yml
 Each module has its own `DbContext` and its own PostgreSQL schema.
 No module reads another module's tables.
 
-## Run it locally
+## Run everything with Docker (one command)
+
+Needs only Docker Desktop.
+
+```bash
+cp .env.example .env      # then put your own values in .env
+docker compose up --build
+```
+
+- Swagger UI: http://localhost:8080/swagger
+- Two separate containers: `app` (the API) and `app-db` (PostgreSQL)
+- Tables are created automatically on startup, and the admin account comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD`
+- Product images are kept in the `uploads` volume, so they survive restarts
+
+
+## Run it locally (for development)
 
 1. Start the database:
    ```bash

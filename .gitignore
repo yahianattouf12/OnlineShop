@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Postman environment with the real admin password (the .example.json template is committed)
+api-tests/OnlineShop-local.postman_environment.json
+
 # Uploaded product images (stored on disk / a Docker volume, never in Git)
 uploads/
 

@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/uploads/
+.env
+.git/
+.vs/
+.vscode/
+.idea/

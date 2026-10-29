@@ -1,0 +1,23 @@
+# 0. API-wide rules: documentation, versioned paths, unified error format, security headers.
+#
+# VS Code "REST Client" extension: click "Send Request" above each request.
+# No login needed in this file.
+
+@baseUrl = http://localhost:8080
+@api = {{baseUrl}}/api/v1
+
+
+### OpenAPI document → 200 (Swagger UI: http://localhost:8080/swagger)
+# Every path starts with /api/v1, and the "Bearer" security scheme gives Swagger its Authorize button.
+GET {{baseUrl}}/openapi/v1.json
+
+### Unified error format + security headers → 401
+# Body: Problem Details (application/problem+json) with type, title, status, instance, traceId.
+# Headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Content-Security-Policy, and no "Server" header.
+GET {{api}}/auth/me
+
+### Same error format for a missing resource → 404, with "detail"
+GET {{api}}/products/00000000-0000-0000-0000-000000000001
+
+### Same error format for invalid input → 422, with "errors" per field
+GET {{api}}/products?pageSize=1000
