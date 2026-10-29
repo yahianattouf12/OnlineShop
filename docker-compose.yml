@@ -1,14 +1,42 @@
+# Start everything:  docker compose up --build
+# Swagger UI:        http://localhost:8080/swagger
+# Secrets come from .env (copy .env.example to .env). .env is never committed.
 services:
+  app:
+    build:
+      context: .                 # the repository root, so the Dockerfile can COPY app/ (and proto/ later)
+      dockerfile: app/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development  # keeps Swagger UI on for the demo
+      # Inside Docker, "localhost" is this container itself. The database is reached by its service name: app-db.
+      ConnectionStrings__Default: Host=app-db;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD}
+      Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env}
+      Admin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
+      Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+    volumes:
+      - uploads:/app/uploads     # product images survive when the container is removed
+    depends_on:
+      app-db:
+        condition: service_healthy   # wait until PostgreSQL really accepts connections
+
   app-db:
     image: postgres:17
     environment:
       POSTGRES_DB: db_online_shop
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "5432:5432"              # lets you run the app with "dotnet run" against this database too
     volumes:
       - app-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d db_online_shop"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   app-db-data:
+  uploads:
