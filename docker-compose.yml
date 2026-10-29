@@ -1,7 +1,15 @@
 # Start everything:  docker compose up --build
+# Website:           http://localhost:3000
 # Swagger UI:        http://localhost:8080/swagger
 # Secrets come from .env (copy .env.example to .env). .env is never committed.
 services:
+  web:
+    build: ./web                 # React frontend, served by nginx; nginx forwards /api to the app container
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+
   app:
     build:
       context: .                 # the repository root, so the Dockerfile can COPY app/ (and proto/ later)

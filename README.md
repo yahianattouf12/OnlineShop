@@ -8,6 +8,7 @@ The focus is on security, inter-service communication and, later, performance, s
 | Part | Technology |
 |---|---|
 | Main application | ASP.NET Core Web API (.NET 10, C#) |
+| Website | React + TypeScript (Vite), served by nginx |
 | Database | PostgreSQL 17 in Docker |
 | Inventory service (Requirement 2) | Node.js + gRPC (coming next) |
 | API docs | OpenAPI + Swagger UI |
@@ -23,6 +24,8 @@ app/Shop.Api/
 │   ├── Orders/        orders and their status
 │   └── Notifications/ messages to the user
 └── Program.cs
+web/                   the website (see web/README.md)
+api-tests/             ready API requests (.http + Postman) for Requirement 1
 inventory/             inventory service (Requirement 2)
 proto/                 gRPC contract shared by both services (Requirement 2)
 docker-compose.yml
@@ -40,8 +43,9 @@ cp .env.example .env      # then put your own values in .env
 docker compose up --build
 ```
 
+- Website: http://localhost:3000
 - Swagger UI: http://localhost:8080/swagger
-- Two separate containers: `app` (the API) and `app-db` (PostgreSQL)
+- Three separate containers: `web` (the website), `app` (the API) and `app-db` (PostgreSQL)
 - Tables are created automatically on startup, and the admin account comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 - Product images are kept in the `uploads` volume, so they survive restarts
 
