@@ -57,8 +57,9 @@ function AdminActions({ order, onChanged }: { order: Order; onChanged: (order: O
       toast(`Order ${shortId(order.id)} is now ${status}. The customer was notified.`);
     } catch (err) {
       setError(err);
-      // 409: someone else changed it first. Show the latest state.
-      if (err instanceof ApiError && err.status === 409) ordersApi.get(order.id).then(onChanged).catch(() => {});
+      // Someone else changed it first: 422 if the order had already moved on (this page was stale),
+      // 409 if both saves happened at the same moment. Either way, show the latest state.
+      if (err instanceof ApiError && (err.status === 409 || err.status === 422)) ordersApi.get(order.id).then(onChanged).catch(() => {});
     } finally {
       setBusy(null);
     }
