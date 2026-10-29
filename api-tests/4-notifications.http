@@ -1,0 +1,221 @@
+# 4. Notifications: everything sent to the user.
+#    A customer is notified when their order is created and when its status changes.
+#    Everyone sees only their own notifications (the IDOR proof for this module is marked ⭐).
+#
+# VS Code "REST Client" extension: click "Send Request" above each request.
+# Send TOP TO BOTTOM the first time: later requests reuse the responses of earlier ones.
+# This file logs in 3 times (login is limited to 5 per minute; on 429 wait a minute).
+# The admin login is read from api-tests/.env (ADMIN_EMAIL, ADMIN_PASSWORD), which git ignores.
+
+@baseUrl = http://localhost:8080
+@api = {{baseUrl}}/api/v1
+@adminEmail = {{$dotenv ADMIN_EMAIL}}
+@adminPassword = {{$dotenv ADMIN_PASSWORD}}
+
+
+###############################################################################
+# Setup: two customers, the admin, one product
+###############################################################################
+
+### Register customer A → 201
+# @name registerA
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "notify.a.{{$timestamp}}@shop.test",
+  "password": "Passw0rd!"
+}
+
+### Register customer B → 201
+# @name registerB
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "notify.b.{{$timestamp}}@shop.test",
+  "password": "Passw0rd!"
+}
+
+### Login customer A → 200
+# @name loginA
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{registerA.response.body.$.email}}",
+  "password": "Passw0rd!"
+}
+
+### Login customer B → 200
+# @name loginB
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{registerB.response.body.$.email}}",
+  "password": "Passw0rd!"
+}
+
+### Login admin → 200
+# @name loginAdmin
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### Add a product as admin → 201
+# @name product
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Desk lamp
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+24.00
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Home
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+
+###############################################################################
+# Notifications are created by the app, never by the client
+###############################################################################
+
+### Notifications without a token → 401
+GET {{api}}/notifications
+
+### Customer A before ordering → 200, no notifications yet
+GET {{api}}/notifications
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Customer A places an order → 201 (this notifies A)
+# @name orderA
+POST {{api}}/orders
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "{{product.response.body.$.id}}", "quantity": 1 }
+  ]
+}
+
+### Customer A's notifications → 200, "We received your order ...", linked to the order (orderId)
+GET {{api}}/notifications
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Admin confirms A's order → 200 (this notifies A, the owner, not the admin)
+PATCH {{api}}/orders/{{orderA.response.body.$.id}}/status
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "status": "Confirmed"
+}
+
+### Customer A's notifications → 200, newest first: "Your order ... is now Confirmed."
+# @name listA
+GET {{api}}/notifications
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Customer A's unread count → 200, { "count": 2 }
+GET {{api}}/notifications/unread-count
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### The admin who changed the status → 200, nothing about A's order
+GET {{api}}/notifications
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+
+###############################################################################
+# Everyone sees and changes only their own notifications
+###############################################################################
+
+### Customer B's notifications → 200, empty: A's notifications are not visible
+GET {{api}}/notifications
+Authorization: Bearer {{loginB.response.body.$.accessToken}}
+
+### ⭐ Customer B marks A's notification as read → 404
+# IDOR: B uses the id of A's newest notification. The query filters by the owner from the token,
+# so for B it does not exist (same protection as orders).
+PATCH {{api}}/notifications/{{listA.response.body.$.items[0].id}}/read
+Authorization: Bearer {{loginB.response.body.$.accessToken}}
+
+### Customer B marks all as read → 204 (only B's own)
+POST {{api}}/notifications/read-all
+Authorization: Bearer {{loginB.response.body.$.accessToken}}
+
+### Customer A is untouched: unread count → 200, still { "count": 2 }
+GET {{api}}/notifications/unread-count
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+
+###############################################################################
+# Reading notifications
+###############################################################################
+
+### Customer A marks the newest one as read → 204
+PATCH {{api}}/notifications/{{listA.response.body.$.items[0].id}}/read
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Marking it again is harmless → 204
+PATCH {{api}}/notifications/{{listA.response.body.$.items[0].id}}/read
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Unread count → 200, { "count": 1 }
+GET {{api}}/notifications/unread-count
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Only unread ones → 200, 1 notification with "readAt": null
+GET {{api}}/notifications?unreadOnly=true
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Mark all as read → 204
+POST {{api}}/notifications/read-all
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Unread count → 200, { "count": 0 }
+GET {{api}}/notifications/unread-count
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Admin ships the order → 200 (a new notification for A)
+PATCH {{api}}/orders/{{orderA.response.body.$.id}}/status
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "status": "Shipped"
+}
+
+### Unread count → 200, { "count": 1 }: "Your order ... is now Shipped."
+GET {{api}}/notifications/unread-count
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+
+###############################################################################
+# Errors
+###############################################################################
+
+### Notification that does not exist → 404
+PATCH {{api}}/notifications/00000000-0000-0000-0000-000000000001/read
+Authorization: Bearer {{loginA.response.body.$.accessToken}}
+
+### Page size over the limit (max 50) → 422
+GET {{api}}/notifications?pageSize=1000
+Authorization: Bearer {{loginA.response.body.$.accessToken}}

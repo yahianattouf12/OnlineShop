@@ -1,4 +1,4 @@
-# 4. Login rate limiting: brute-force protection, 5 login attempts per minute per IP, then 429.
+# 5. Login rate limiting: brute-force protection, 5 login attempts per minute per IP, then 429.
 #
 # VS Code "REST Client" extension: click "Send Request" above each request.
 # Logins from the other files in the last minute count too, so the 429 may come early.
