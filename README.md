@@ -10,7 +10,7 @@ The focus is on security, inter-service communication and, later, performance, s
 | Main application | ASP.NET Core Web API (.NET 10, C#) |
 | Website | React + TypeScript (Vite), served by nginx |
 | Database | PostgreSQL 17 in Docker |
-| Inventory service (Requirement 2) | Node.js + gRPC (coming next) |
+| Inventory service (Requirement 2) | Node.js + gRPC, with its own PostgreSQL |
 | API docs | OpenAPI + Swagger UI |
 
 ## Project structure
@@ -25,7 +25,7 @@ app/Shop.Api/
 │   └── Notifications/ messages to the user
 └── Program.cs
 web/                   the website (see web/README.md)
-api-tests/             ready API requests (.http + Postman) for Requirement 1
+api-tests/             ready API requests (.http + Postman) and the Requirement 2 proofs
 seed/                  demo catalog: products.json, images/, seed.mjs
 inventory/             inventory service (Requirement 2)
 proto/                 gRPC contract shared by both services (Requirement 2)
@@ -46,7 +46,8 @@ docker compose up --build
 
 - Website: http://localhost:3000
 - Swagger UI: http://localhost:8080/swagger
-- Three separate containers: `web` (the website), `app` (the API) and `app-db` (PostgreSQL)
+- Five separate containers: `web` (the website), `app` (the API) + `app-db`, and `inventory` (Node.js, gRPC) + `inventory-db`
+- The app never reads the inventory database: it only talks to the inventory service over gRPC (contract: `proto/inventory.proto`)
 - Tables are created automatically on startup, and the admin account comes from `ADMIN_EMAIL` / `ADMIN_PASSWORD`
 - Product images are kept in the `uploads` volume, so they survive restarts
 
@@ -93,8 +94,10 @@ All routes start with `/api/v1`. Errors always use the same format (Problem Deta
 | GET | `/users/{id}` | admin only | 200 |
 | POST | `/products` | admin only (multipart, image ≤ 5 MB) | 201 |
 | GET | `/products?category=&page=&pageSize=` | anyone | 200, paged |
-| GET | `/products/{id}` | anyone | 200 |
+| GET | `/products/{id}` | anyone | 200, with `stock` from the inventory service (`null` when it is down) |
 | GET | `/products/{id}/image` | anyone | 200, image file |
+| PUT | `/products/{id}/stock` | admin only | 200 |
+| POST | `/orders` | customer | 201, 409 not enough stock, 503 inventory down |
 
 To call a protected route in Swagger: log in, copy `accessToken`, click **Authorize** and paste it.
 

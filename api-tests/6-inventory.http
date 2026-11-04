@@ -1,0 +1,187 @@
+# 6. Requirement 2: the inventory service (Node.js) over gRPC.
+#    Stock in the product details, all-or-nothing reservation, clear refusal, and what the user
+#    sees when the inventory service is stopped. The proofs the brief asks for are marked ⭐.
+#    The race-condition proof (many orders for the last unit) is a script: node api-tests/race-last-unit.mjs
+#
+# Send TOP TO BOTTOM the first time. This file logs in 2 times.
+
+@baseUrl = http://localhost:8080
+@api = {{baseUrl}}/api/v1
+@adminEmail = {{$dotenv ADMIN_EMAIL}}
+@adminPassword = {{$dotenv ADMIN_PASSWORD}}
+
+
+###############################################################################
+# Setup: the admin, a customer, two products with stock
+###############################################################################
+
+### Login admin → 200
+# @name loginAdmin
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### Register a customer → 201
+# @name register
+POST {{api}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "stock.{{$timestamp}}@shop.test",
+  "password": "Passw0rd!"
+}
+
+### Login the customer → 200
+# @name loginCustomer
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{register.response.body.$.email}}",
+  "password": "Passw0rd!"
+}
+
+### Add product 1 as admin → 201
+# @name product1
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Headphones
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+59.90
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Audio
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+### Add product 2 as admin → 201
+# @name product2
+POST {{api}}/products
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: multipart/form-data; boundary=ShopBoundary
+
+--ShopBoundary
+Content-Disposition: form-data; name="name"
+
+Charger
+--ShopBoundary
+Content-Disposition: form-data; name="price"
+
+12.00
+--ShopBoundary
+Content-Disposition: form-data; name="category"
+
+Accessories
+--ShopBoundary
+Content-Disposition: form-data; name="image"; filename="product.png"
+Content-Type: image/png
+
+< ./product.png
+--ShopBoundary--
+
+
+###############################################################################
+# Stock
+###############################################################################
+
+### Set the stock of product 1 to 5 (admin) → 200 { "stock": 5 }
+PUT {{api}}/products/{{product1.response.body.$.id}}/stock
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "quantity": 5 }
+
+### Set the stock of product 2 to 1 (admin) → 200 { "stock": 1 }
+PUT {{api}}/products/{{product2.response.body.$.id}}/stock
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "quantity": 1 }
+
+### A customer cannot set the stock → 403
+PUT {{api}}/products/{{product1.response.body.$.id}}/stock
+Authorization: Bearer {{loginCustomer.response.body.$.accessToken}}
+Content-Type: application/json
+
+{ "quantity": 1000 }
+
+### ⭐ Product details show the stock, asked from the inventory service → 200, "stock": 5
+GET {{api}}/products/{{product1.response.body.$.id}}
+
+
+###############################################################################
+# Orders reserve the stock: all or nothing
+###############################################################################
+
+### ⭐ Not enough stock → 409 "Not enough stock for: Charger." with "shortages"
+# 2 headphones are available, but only 1 charger. Nothing is reserved: the headphones' stock stays 5.
+POST {{api}}/orders
+Authorization: Bearer {{loginCustomer.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "{{product1.response.body.$.id}}", "quantity": 2 },
+    { "productId": "{{product2.response.body.$.id}}", "quantity": 3 }
+  ]
+}
+
+### Still 5: the refused order took nothing (all or nothing) → "stock": 5
+GET {{api}}/products/{{product1.response.body.$.id}}
+
+### Enough stock → 201, the stock is reserved
+POST {{api}}/orders
+Authorization: Bearer {{loginCustomer.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "{{product1.response.body.$.id}}", "quantity": 2 },
+    { "productId": "{{product2.response.body.$.id}}", "quantity": 1 }
+  ]
+}
+
+### Now 3 → "stock": 3
+GET {{api}}/products/{{product1.response.body.$.id}}
+
+
+###############################################################################
+# ⭐ What the user sees when the inventory service is down
+###############################################################################
+# 1. In a terminal: docker compose stop inventory
+# 2. Send the two requests below.
+# 3. Bring it back: docker compose start inventory   (the app notices within a few seconds)
+#
+# To show a SLOW service instead of a stopped one: docker compose pause inventory
+# (the container freezes and never answers). The app gives up at the deadline (2 s) and answers 503.
+# Then: docker compose unpause inventory
+
+### Product details still work, without the stock → 200, "stock": null
+GET {{api}}/products/{{product1.response.body.$.id}}
+
+### Ordering is refused with a clear message, quickly → 503 "The inventory service is not available right now..."
+POST {{api}}/orders
+Authorization: Bearer {{loginCustomer.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "{{product1.response.body.$.id}}", "quantity": 1 }
+  ]
+}
