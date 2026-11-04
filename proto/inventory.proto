@@ -1,0 +1,71 @@
+// The contract between the main application (gRPC client) and the inventory service (gRPC server).
+// Both sides build their code from this one file, so they always agree on the messages.
+syntax = "proto3";
+
+package inventory.v1;
+
+option csharp_namespace = "Shop.Api.Integrations.Inventory.Protos";
+
+service InventoryService {
+  // How many units of this product are available right now?
+  rpc GetStock (GetStockRequest) returns (GetStockReply);
+
+  // Reserves the quantities of ALL the items of an order in one go: everything or nothing.
+  // Calling it again with the same order_id does not reserve twice.
+  rpc Reserve (ReserveRequest) returns (ReserveReply);
+
+  // Gives back what an order reserved (for example when saving the order failed).
+  // Safe to call more than once, and safe to call even if nothing was reserved.
+  rpc Release (ReleaseRequest) returns (ReleaseReply);
+
+  // Admin: sets how many units of a product are in stock.
+  rpc SetStock (SetStockRequest) returns (SetStockReply);
+}
+
+message GetStockRequest {
+  string product_id = 1; // a Guid, as text
+}
+
+message GetStockReply {
+  string product_id = 1;
+  int32 available = 2;
+}
+
+message ReserveRequest {
+  string order_id = 1;              // the reservation is remembered under the order's id
+  repeated ReserveItem items = 2;
+}
+
+message ReserveItem {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+message ReserveReply {
+  bool reserved = 1;                // true: everything was reserved. false: nothing was reserved
+  repeated Shortage shortages = 2;  // when reserved is false: which products did not have enough
+}
+
+message Shortage {
+  string product_id = 1;
+  int32 requested = 2;
+  int32 available = 3;
+}
+
+message ReleaseRequest {
+  string order_id = 1;
+}
+
+message ReleaseReply {
+  bool released = 1;                // false: there was nothing (left) to give back
+}
+
+message SetStockRequest {
+  string product_id = 1;
+  int32 quantity = 2;
+}
+
+message SetStockReply {
+  string product_id = 1;
+  int32 available = 2;
+}
