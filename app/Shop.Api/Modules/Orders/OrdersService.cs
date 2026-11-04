@@ -5,6 +5,7 @@ using Shop.Api.Common.Paging;
 using Shop.Api.Modules.Notifications.Contracts;
 using Shop.Api.Modules.Orders.Dtos;
 using Shop.Api.Modules.Products.Contracts;
+using Shop.Api.Integrations.Inventory;
 
 namespace Shop.Api.Modules.Orders;
 
@@ -12,6 +13,8 @@ public class OrdersService
 {
     private readonly OrdersDbContext _db;
     private readonly IProductCatalog _productCatalog; // the Products module's public door, NOT ProductsDbContext
+    private readonly IInventoryService _inventory; // the inventory service, over gRPC
+
     private readonly INotificationService _notifications; // the Notifications module's public door
     private readonly ICurrentUser _currentUser;
     private readonly ILogger<OrdersService> _logger;
@@ -20,12 +23,14 @@ public class OrdersService
         OrdersDbContext db,
         IProductCatalog productCatalog,
         INotificationService notifications,
+        IInventoryService inventory,
         ICurrentUser currentUser,
         ILogger<OrdersService> logger)
     {
         _db = db;
         _productCatalog = productCatalog;
         _notifications = notifications;
+        _inventory = inventory;
         _currentUser = currentUser;
         _logger = logger;
     }
@@ -75,11 +80,23 @@ public class OrdersService
         order.TotalAmount = order.Items.Sum(i => i.UnitPrice * i.Quantity);
         order.StatusHistory.Add(NewHistoryEntry(OrderStatus.Pending, now, userId));
 
-        // 4. (Requirement 2) Reserve the quantities in the inventory service here, before saving.
+        // 4. Reserve the stock of ALL the items in ONE call to the inventory service: all or nothing.
+        //    The order is saved only if the inventory says yes.
+        await ReserveStockAsync(order);
 
         // 5. The order, its items and its first history entry are saved in ONE transaction: all or nothing.
+        //    If saving fails, the stock we just reserved must go back to the inventory (compensation).
         _db.Orders.Add(order);
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Saving order {OrderId} failed after its stock was reserved; releasing the stock", order.Id);
+            await TryReleaseStockAsync(order.Id);
+            throw;
+        }
 
         _logger.LogInformation("Order {OrderId} created by user {UserId}, total {Total}", order.Id, userId, order.TotalAmount);
 
@@ -164,6 +181,58 @@ public class OrdersService
         await TryNotifyAsync(order.UserId, $"Your order {ShortId(order.Id)} is now {newStatus}.", order.Id);
 
         return ToResponse(order);
+    }
+
+    /// <summary>
+    /// Asks the inventory to reserve every item of the order, under the order's id.
+    /// CancellationToken.None: once the call is sent we must learn how it ended, even if the client
+    /// disconnects, or stock could stay reserved for an order that does not exist. The deadline still applies.
+    /// </summary>
+    private async Task ReserveStockAsync(Order order)
+    {
+        IReadOnlyList<StockShortage> shortages;
+        try
+        {
+            shortages = await _inventory.ReserveAsync(
+                order.Id, order.Items.Select(i => new StockItem(i.ProductId, i.Quantity)), CancellationToken.None);
+        }
+        catch (ServiceUnavailableException)
+        {
+            // The deadline passed, so we do not know if the inventory reserved or not (its answer may just
+            // be late). Release to be safe: it does nothing if nothing was reserved. The user gets the 503.
+            await TryReleaseStockAsync(order.Id);
+            throw;
+        }
+
+        if (shortages.Count == 0)
+            return;
+
+        var names = order.Items.ToDictionary(i => i.ProductId, i => i.ProductName);
+        throw new ConflictException($"Not enough stock for: {string.Join(", ", shortages.Select(s => names[s.ProductId]))}.")
+        {
+            Extensions =
+            {
+                ["shortages"] = shortages
+                    .Select(s => new { s.ProductId, ProductName = names[s.ProductId], s.Requested, s.Available })
+                    .ToList(),
+            },
+        };
+    }
+
+    /// <summary>
+    /// Best effort: gives the order's reserved stock back. A failure here is only logged, so the caller's
+    /// real error still reaches the user. If it fails, the stock stays reserved until someone releases it by hand.
+    /// </summary>
+    private async Task TryReleaseStockAsync(Guid orderId)
+    {
+        try
+        {
+            await _inventory.ReleaseAsync(orderId, CancellationToken.None);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Could not release the stock of order {OrderId}", orderId);
+        }
     }
 
     /// <summary>
