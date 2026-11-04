@@ -1,5 +1,6 @@
-// Adds the demo catalog (products.json + images/) through the API, as the admin.
-// Products that already exist (same name) are skipped, so it is safe to run more than once.
+// Adds the demo catalog (products.json + images/) through the API, as the admin, and sets each product's stock
+// (the API forwards it to the inventory service). Products that already exist (same name) are not added again,
+// so it is safe to run more than once; an existing product with 0 in stock is restocked.
 //
 //   With Docker (no Node needed):  docker compose --profile seed run --rm seed
 //   With Node 18+:                 node seed/seed.mjs      (reads the admin login from the root .env)
@@ -49,25 +50,51 @@ async function login() {
   }
 }
 
-async function existingNames() {
-  const names = new Set();
+/** Name (lower case) → id of every product already in the shop. */
+async function existingProducts() {
+  const ids = new Map();
   for (let page = 1; ; page++) {
     const res = await fetch(`${API}/products?page=${page}&pageSize=50`);
     const data = await res.json();
-    data.items.forEach((p) => names.add(p.name.toLowerCase()));
-    if (page >= data.totalPages) return names;
+    data.items.forEach((p) => ids.set(p.name.toLowerCase(), p.id));
+    if (page >= data.totalPages) return ids;
   }
+}
+
+/** Returns false (and says why) when the inventory service could not take it, e.g. it is not running. */
+async function setStock(id, name, quantity) {
+  const res = await fetch(`${API}/products/${id}/stock`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity }),
+  });
+  if (res.ok) return true;
+  console.error(`       stock of ${name} not set: ${res.status} ${await res.text()}`);
+  return false;
+}
+
+async function currentStock(id) {
+  const res = await fetch(`${API}/products/${id}`);
+  return res.ok ? (await res.json()).stock : null;
 }
 
 const products = JSON.parse(await readFile(join(here, 'products.json'), 'utf8'));
 const token = await login();
-const existing = await existingNames();
+const existing = await existingProducts();
 let added = 0;
+let stockFailures = 0;
 
 // The shop lists newest first, so add them in reverse to show them in the order of products.json.
 for (const product of [...products].reverse()) {
-  if (existing.has(product.name.toLowerCase())) {
-    console.log(`skip   ${product.name} (already in the shop)`);
+  const existingId = existing.get(product.name.toLowerCase());
+  if (existingId) {
+    // Never overwrite a stock the admin set; only fill a product that has none (e.g. seeded before Requirement 2).
+    if ((await currentStock(existingId)) === 0) {
+      if (await setStock(existingId, product.name, product.stock)) console.log(`stock  ${product.name}: 0 → ${product.stock}`);
+      else stockFailures++;
+    } else {
+      console.log(`skip   ${product.name} (already in the shop)`);
+    }
     continue;
   }
   const form = new FormData();
@@ -83,7 +110,16 @@ for (const product of [...products].reverse()) {
     process.exit(1);
   }
   added++;
-  console.log(`added  ${product.name}`);
+  const { id } = await res.json();
+  if (await setStock(id, product.name, product.stock)) console.log(`added  ${product.name} (${product.stock} in stock)`);
+  else {
+    stockFailures++;
+    console.log(`added  ${product.name} (stock not set)`);
+  }
 }
 
 console.log(`\nDone: ${added} added, ${products.length - added} already there.`);
+if (stockFailures > 0) {
+  console.error(`${stockFailures} stock value(s) could not be set. Is the inventory service running? Run the seed again once it is.`);
+  process.exit(1);
+}
