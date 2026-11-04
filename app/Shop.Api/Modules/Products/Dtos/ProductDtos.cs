@@ -37,6 +37,7 @@ public class ProductQuery
     public int PageSize { get; set; } = 10;
 }
 
+/// <summary>Stock is filled only by GET /products/{id}. There, null means the inventory service could not be asked.</summary>
 public record ProductResponse(
     Guid Id,
     string Name,
@@ -44,4 +45,14 @@ public record ProductResponse(
     decimal Price,
     string Category,
     string ImageUrl,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    int? Stock = null);
+
+/// <summary>PUT /products/{id}/stock (admin): how many units are in stock now.</summary>
+public class SetStockRequest
+{
+    [Required, Range(0, 1_000_000)]
+    public int? Quantity { get; set; }
+}
+
+public record StockResponse(Guid ProductId, int Stock);
