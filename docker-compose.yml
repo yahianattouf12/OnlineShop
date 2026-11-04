@@ -37,6 +37,35 @@ services:
       timeout: 3s
       retries: 10
 
+  # Requirement 2: the inventory service, in another language (Node.js), with its own database.
+  inventory:
+    build:
+      context: .                 # the repository root, so the Dockerfile can COPY proto/
+      dockerfile: inventory/Dockerfile
+    ports:
+      - "50051:50051"            # lets you run the app with "dotnet run" against this service too
+    environment:
+      DATABASE_URL: postgres://inventory:${INVENTORY_DB_PASSWORD}@inventory-db:5432/inventory
+    depends_on:
+      inventory-db:
+        condition: service_healthy
+
+  inventory-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: inventory
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: ${INVENTORY_DB_PASSWORD:?Set INVENTORY_DB_PASSWORD in .env}
+    # No ports: nothing outside Docker needs this database, only the inventory service.
+    volumes:
+      - inventory-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d inventory"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   app-db-data:
   uploads:
+  inventory-db-data:
