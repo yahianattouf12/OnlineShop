@@ -1,7 +1,15 @@
 # Start everything:  docker compose up --build
+# Website:           http://localhost:3000
 # Swagger UI:        http://localhost:8080/swagger
 # Secrets come from .env (copy .env.example to .env). .env is never committed.
 services:
+  web:
+    build: ./web                 # React frontend, served by nginx; nginx forwards /api to the app container
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+
   app:
     build:
       context: .                 # the repository root, so the Dockerfile can COPY app/ (and proto/ later)
@@ -11,7 +19,9 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development  # keeps Swagger UI on for the demo
       # Inside Docker, "localhost" is this container itself. The database is reached by its service name: app-db.
-      ConnectionStrings__Default: Host=app-db;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD}
+      # GSS Encryption Mode=Disable: we do not use Kerberos, and without it Npgsql logs a harmless
+      # "Error: libgssapi_krb5.so.2: cannot open shared object file" on every start.
+      ConnectionStrings__Default: Host=app-db;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable
       Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env}
       Admin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
       Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
@@ -64,6 +74,22 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Optional: adds the demo catalog (12 products with images) through the API.
+  # Not started by "docker compose up"; run it with:  docker compose --profile seed run --rm seed
+  seed:
+    image: node:22-alpine
+    profiles: ["seed"]
+    working_dir: /seed
+    volumes:
+      - ./seed:/seed:ro
+    environment:
+      API_URL: http://app:8080
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    command: ["node", "seed.mjs"]
+    depends_on:
+      - app
 
 volumes:
   app-db-data:

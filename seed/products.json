@@ -1,0 +1,86 @@
+[
+  {
+    "name": "Studio Headphones",
+    "category": "audio",
+    "price": 129.0,
+    "image": "studio-headphones.png",
+    "description": "Closed-back over-ear headphones with soft memory-foam cushions and a flat, honest sound for long listening sessions."
+  },
+  {
+    "name": "Wireless Earbuds",
+    "category": "audio",
+    "price": 79.0,
+    "image": "wireless-earbuds.png",
+    "description": "Light earbuds with a pocket-size charging case. Up to 6 hours per charge and 24 hours with the case."
+  },
+  {
+    "name": "Portable Speaker",
+    "category": "audio",
+    "price": 59.0,
+    "image": "portable-speaker.png",
+    "description": "A splash-proof speaker with 360° sound that fills a room and still fits in a backpack."
+  },
+  {
+    "name": "Minimal Watch",
+    "category": "accessories",
+    "price": 149.0,
+    "image": "minimal-watch.png",
+    "description": "A clean 38 mm dial, sapphire glass and a vegetable-tanned leather strap that ages beautifully."
+  },
+  {
+    "name": "Canvas Backpack",
+    "category": "accessories",
+    "price": 89.0,
+    "image": "canvas-backpack.png",
+    "description": "Waxed canvas, a padded 15-inch laptop sleeve and a front pocket for the things you reach for most."
+  },
+  {
+    "name": "Classic Sunglasses",
+    "category": "accessories",
+    "price": 65.0,
+    "image": "classic-sunglasses.png",
+    "description": "Acetate frames with polarised, UV400 lenses. Comes with a hard case and a cleaning cloth."
+  },
+  {
+    "name": "Insulated Bottle",
+    "category": "accessories",
+    "price": 24.0,
+    "image": "insulated-bottle.png",
+    "description": "750 ml stainless steel. Keeps drinks cold for 24 hours or hot for 12, and never sweats."
+  },
+  {
+    "name": "Running Sneakers",
+    "category": "footwear",
+    "price": 110.0,
+    "image": "running-sneakers.png",
+    "description": "A breathable knit upper on a responsive foam sole, made for daily runs and long walks."
+  },
+  {
+    "name": "Ceramic Mug",
+    "category": "home",
+    "price": 18.0,
+    "image": "ceramic-mug.png",
+    "description": "A hand-glazed 350 ml stoneware mug. Dishwasher and microwave safe."
+  },
+  {
+    "name": "Desk Lamp",
+    "category": "home",
+    "price": 45.0,
+    "image": "desk-lamp.png",
+    "description": "An adjustable arm with a warm, dimmable LED. Bright enough for work, soft enough for evenings."
+  },
+  {
+    "name": "Monstera Plant",
+    "category": "home",
+    "price": 32.0,
+    "image": "monstera-plant.png",
+    "description": "An easy-care Monstera in a 14 cm terracotta pot. Likes bright, indirect light and weekly water."
+  },
+  {
+    "name": "Dot Grid Notebook",
+    "category": "stationery",
+    "price": 12.0,
+    "image": "dot-grid-notebook.png",
+    "description": "A5, 192 pages of 100 gsm dot-grid paper, lay-flat binding and an elastic closure. Pencil included."
+  }
+]
