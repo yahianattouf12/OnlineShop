@@ -37,9 +37,16 @@ public class ProductsController : ControllerBase
     public Task<PagedResponse<ProductResponse>> List([FromQuery] ProductQuery query, CancellationToken ct) =>
         _productsService.ListAsync(query, ct);
 
+    /// <summary>One product, with how many units are in stock (asked from the inventory service).</summary>
     [HttpGet("{id:guid}")]
     public Task<ProductResponse> GetById(Guid id, CancellationToken ct) =>
         _productsService.GetByIdAsync(id, ct);
+
+    /// <summary>Sets how many units of the product are in stock (admin only).</summary>
+    [HttpPut("{id:guid}/stock")]
+    [Authorize(Roles = Roles.Admin)]
+    public Task<StockResponse> SetStock(Guid id, SetStockRequest request, CancellationToken ct) =>
+        _productsService.SetStockAsync(id, request.Quantity!.Value, ct);
 
     /// <summary>The product's image file.</summary>
     [HttpGet("{id:guid}/image")]

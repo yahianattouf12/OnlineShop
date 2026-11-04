@@ -3,6 +3,7 @@ using Shop.Api.Common;
 using Shop.Api.Common.Errors;
 using Shop.Api.Common.Paging;
 using Shop.Api.Common.Storage;
+using Shop.Api.Integrations.Inventory;
 using Shop.Api.Modules.Products.Dtos;
 
 namespace Shop.Api.Modules.Products;
@@ -11,12 +12,18 @@ public class ProductsService
 {
     private readonly ProductsDbContext _db;
     private readonly IImageStorage _imageStorage;
+    private readonly IInventoryService _inventory; // the stock lives in the inventory service, not in our database
     private readonly ILogger<ProductsService> _logger;
 
-    public ProductsService(ProductsDbContext db, IImageStorage imageStorage, ILogger<ProductsService> logger)
+    public ProductsService(
+        ProductsDbContext db,
+        IImageStorage imageStorage,
+        IInventoryService inventory,
+        ILogger<ProductsService> logger)
     {
         _db = db;
         _imageStorage = imageStorage;
+        _inventory = inventory;
         _logger = logger;
     }
 
@@ -80,7 +87,29 @@ public class ProductsService
     public async Task<ProductResponse> GetByIdAsync(Guid id, CancellationToken ct)
     {
         var product = await FindAsync(id, ct);
-        return ToResponse(product);
+
+        // Ask the inventory service how many are left. If it is down or too slow, the product page
+        // still works: we show the product without its stock (null) instead of failing the whole page.
+        int? stock;
+        try
+        {
+            stock = await _inventory.GetStockAsync(id, ct);
+        }
+        catch (ServiceUnavailableException)
+        {
+            stock = null;
+        }
+
+        return ToResponse(product) with { Stock = stock };
+    }
+
+    public async Task<StockResponse> SetStockAsync(Guid id, int quantity, CancellationToken ct)
+    {
+        await FindAsync(id, ct); // 404 for a product that does not exist
+
+        var stock = await _inventory.SetStockAsync(id, quantity, ct);
+        _logger.LogInformation("Stock of product {ProductId} set to {Stock}", id, stock);
+        return new StockResponse(id, stock);
     }
 
     public async Task<(Stream Content, string ContentType)> GetImageAsync(Guid id, CancellationToken ct)
