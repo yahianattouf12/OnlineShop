@@ -11,7 +11,9 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development  # keeps Swagger UI on for the demo
       # Inside Docker, "localhost" is this container itself. The database is reached by its service name: app-db.
-      ConnectionStrings__Default: Host=app-db;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD}
+      # GSS Encryption Mode=Disable: we do not use Kerberos, and without it Npgsql logs a harmless
+      # "Error: libgssapi_krb5.so.2: cannot open shared object file" on every start.
+      ConnectionStrings__Default: Host=app-db;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable
       Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env}
       Admin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
       Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
