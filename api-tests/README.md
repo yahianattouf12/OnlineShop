@@ -1,6 +1,6 @@
-# API tests: Requirement 1 (API Design & Security)
+# API tests: Requirement 1 (API Design & Security) and Requirement 2 (Inventory service)
 
-Ready requests that cover everything in Requirement 1, in two forms:
+Ready requests that cover everything in Requirement 1, in two forms (Requirement 2 has [its own section](#requirement-2-the-inventory-service)):
 
 - **`.http` files** for the VS Code **REST Client** extension: the quickest for a live demo. Click **Send Request** above each request.
 - **A Postman collection** with automatic checks: run it once to prove everything is green.
@@ -15,6 +15,8 @@ Ready requests that cover everything in Requirement 1, in two forms:
 | `3-orders.http` | Create, view, change status, and the **two proofs** (⭐) |
 | `4-notifications.http` | Notified on order and status change, own notifications only (⭐), unread count, mark as read |
 | `5-rate-limit.http` | Brute-force protection on login (429) |
+| `6-inventory.http` | Requirement 2: stock in product details, all-or-nothing reservation (409), what the user sees when inventory is down (⭐) |
+| `race-last-unit.mjs` | Requirement 2 proof (⭐): many orders at the same moment for the last unit, exactly one succeeds. Run: `node api-tests/race-last-unit.mjs` |
 | `.env.example` | Template for `.env`: the admin login that the `.http` files read |
 | `OnlineShop-R1.postman_collection.json` | All the requests for Postman, in 6 folders, with checks |
 | `OnlineShop-local.postman_environment.example.json` | Template for the Postman environment: `baseUrl` and the admin login |
@@ -92,9 +94,51 @@ In the Postman collection every request checks its own result. These checks also
 - **Admin changes the status** (`4-notifications.http`): the order's owner is notified, not the admin.
 - **Forged token** (Postman only): editing the role inside the JWT to `Admin` breaks the signature → `401`.
 
+## Requirement 2: the inventory service
+
+The stock lives in a separate service (Node.js, `inventory/`) with its own database. The app only talks to it
+over gRPC, through the shared contract `proto/inventory.proto`. Every call has a 2-second deadline.
+
+### Before the demo
+
+1. `docker compose up --build -d`, and check `docker compose ps`: `inventory` and `inventory-db` are running.
+2. There must be at least one product (send `6-inventory.http`, or run `docker compose --profile seed run --rm seed`).
+
+### What each requirement item maps to
+
+| Requirement 2 item | Show this |
+|---|---|
+| Separate service, another language, its own database | `docker compose ps`: `inventory` (Node.js) + `inventory-db`. The app has no connection string for it |
+| Shared contract, both sides generated from it | `proto/inventory.proto`: the Node service loads it, the .NET build generates the client from it |
+| Product details show the stock | `6-inventory.http`: "⭐ Product details show the stock" → `"stock": 5` |
+| One reservation request for the whole order; saved only after the inventory agrees | `6-inventory.http`: "Enough stock → 201", then the stock drops |
+| Not enough stock → clear refusal | `6-inventory.http`: "⭐ Not enough stock" → `409` naming the product, with `shortages` |
+| All or nothing | `6-inventory.http`: after the `409`, the other product's stock is unchanged |
+| ⭐ Many orders for the last unit → exactly one succeeds | `node api-tests/race-last-unit.mjs 50` → `1 × 201`, `49 × 409`, stock `0`, `PASS` |
+| ⭐ Stop the inventory service → what the user sees | `docker compose stop inventory`, then the last section of `6-inventory.http` |
+| Slow inventory → a deadline, clear answer | `docker compose pause inventory`: the order gets `503` after 2 s. `docker compose unpause inventory` |
+| Saving fails after the reservation → the stock is given back | `app/Shop.Api/Modules/Orders/OrdersService.cs`: the `catch` around `SaveChangesAsync` calls Release |
+
+### The two proofs the brief asks for
+
+1. **⭐ Race on the last unit:** `node api-tests/race-last-unit.mjs 50`. The script sets a product's stock to 1, then sends
+   50 orders at the same moment (`Promise.all`). Exactly one gets `201`, the other 49 get `409`, and the stock ends at `0`.
+   Why: `inventory/src/inventory.js` checks and subtracts in **one** statement,
+   `UPDATE stock SET quantity = quantity - $2 WHERE product_id = $1 AND quantity >= $2`. PostgreSQL locks the row, so the
+   second order waits, then sees `quantity = 0`, and its `WHERE` no longer matches.
+2. **⭐ Inventory down:** `docker compose stop inventory`, then in `6-inventory.http`:
+   - product details still answer `200`, with `"stock": null`
+   - an order gets `503` "The inventory service is not available right now...", in about 2 seconds, and no order is saved
+   - `docker compose start inventory`: within a few seconds everything works again
+
+The race script logs in twice, and login is limited to 5 per minute: on `429`, wait a minute and run it again.
+It reads the admin login from `api-tests/.env`, or else from the root `.env`.
+
 ## If something fails
 
 - **Login returns 429:** the rate limit. Wait 1 minute.
+- **Orders get 503 although the inventory is running:** it was just restarted. Wait a few seconds; the app reconnects on its own.
+- **`"stock": null` for every product:** the inventory service is down. `docker compose ps`, then `docker compose start inventory`.
 - **A request sends `{{...}}` literally, or gets 401 / 404 unexpectedly:** an earlier request in the same file has not been sent yet. Send the file top to bottom.
 - **Login admin returns 401:** the admin password in `api-tests/.env` or in the Postman environment does not match `ADMIN_PASSWORD` in the root `.env`, or the database was created with an older `.env`. Fix the value, or reset with `docker compose down -v` and `docker compose up -d`.
 - **Postman: add product returns 422 "The Image field is required":** Postman could not find the image file. The collection points to `product.png` / `not-an-image.png` relative to this folder: set this folder as Postman's working directory, or open the request's **Body** tab and re-select the file. (`newman` finds them when run from this folder.)
