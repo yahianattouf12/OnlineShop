@@ -24,19 +24,25 @@ npm run dev        # http://localhost:5173, /api is forwarded to http://localhos
 | Who | Page | Route |
 |---|---|---|
 | Everyone | Shop: products, category filter, pagination | `/products` |
-| Everyone | Product details | `/products/:id` |
+| Everyone | Product details, with the stock from the inventory service (or "availability unknown" when it is down) | `/products/:id` |
 | Everyone | Log in · Sign up | `/login` · `/register` |
-| Customer | Cart and checkout (cart kept in the browser) | `/cart` |
+| Customer | Cart and checkout (cart kept in the browser): a stock warning per line, and a clear message when the order is refused for stock (409) or the inventory service is down (503) | `/cart` |
 | Customer | My orders (status filter, pagination) | `/orders` |
 | Customer | Notifications (unread badge in the nav) | `/notifications` |
 | Customer, Admin | Order details with status timeline (admin: change status) | `/orders/:id` |
 | Customer, Admin | Security checks: runs the Requirement 1 proofs live and shows each request and response | `/security` |
 | Admin | All orders (with customer emails) | `/admin/orders` |
-| Admin | Add a product with its image | `/admin/products/new` |
+| Admin | Inventory: every product's stock, read from and saved to the inventory service | `/admin/inventory` |
+| Admin | Add a product with its image and its starting stock | `/admin/products/new` |
+| Admin | Inventory checks: runs the Requirement 2 proofs live (not enough stock, all or nothing, the race on the last unit, the inventory service stopped or slow) | `/inventory-checks` |
 | Admin | Users | `/admin/users` |
 
 Errors from the API are always Problem Details, so the site shows them the same way everywhere:
-422 next to the right form field, 404/403 as a page, 401 sends you to log in, 429 on login shows a countdown.
+422 next to the right form field, 404/403 as a page, 401 sends you to log in, 429 on login shows a countdown,
+409 "not enough stock" lists each short product with a one-click fix, and 503 says the inventory service is not answering.
+
+The stock is never stored here or in the app's database: the product details endpoint asks the inventory service
+for it on every call, and the shop treats it as a hint. The real check happens when the order is placed, all at once.
 
 ## Code map
 
@@ -58,4 +64,5 @@ pill-shaped controls, no shadows, and Inter (the documented substitute for Saans
 end with a period. The one addition is red for errors (`--color-error*` in `tokens.css`): invalid field
 outlines, field messages, error notices and failed security checks, so a problem stands out from normal content.
 Order status badges are color-coded too (`--color-status-*`): pending amber, confirmed blue, shipped purple,
-delivered green, cancelled red, each as strong text on a translucent tint.
+delivered green, cancelled red, each as strong text on a translucent tint. Stock badges reuse those hues:
+in stock green, "only N left" amber, out of stock red, availability unknown grey.

@@ -360,13 +360,13 @@ p {
   display: none;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1320px) {
   .nav-email {
     display: none;
   }
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .nav .nav-menu-button {
     display: inline-flex;
   }
@@ -884,6 +884,32 @@ p {
   border-color: var(--color-error-hairline);
   background: var(--color-error-soft);
   color: var(--color-error-text);
+}
+
+/* Stock, from the inventory service: the order status hues (green in stock, amber low, red out, grey unknown) */
+.stock-in {
+  background: var(--color-status-delivered-bg);
+  color: var(--color-status-delivered);
+}
+
+.stock-low {
+  background: var(--color-status-pending-bg);
+  color: var(--color-status-pending);
+}
+
+.stock-out {
+  background: var(--color-status-cancelled-bg);
+  color: var(--color-status-cancelled);
+}
+
+.stock-unknown {
+  background: var(--color-canvas-soft);
+  color: var(--color-text-muted);
+}
+
+.stock-input {
+  width: 120px;
+  flex: none;
 }
 
 /* ---------- Notices (errors are the one place red is used) ---------- */
