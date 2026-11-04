@@ -45,6 +45,7 @@ public class OrdersDbContext : DbContext
         {
             entity.ToTable("OrderStatusHistory");
             entity.HasKey(h => h.Id);
+            //! i should review this comment, it is not clear what it means
             // We set the Guid ourselves. Without this, EF thinks a new history row added to an
             // existing order is an old row, sends UPDATE instead of INSERT, and the save fails.
             entity.Property(h => h.Id).ValueGeneratedNever();

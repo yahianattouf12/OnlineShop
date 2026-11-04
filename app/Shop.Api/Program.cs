@@ -6,6 +6,7 @@ using Shop.Api.Modules.Notifications;
 using Shop.Api.Modules.Orders;
 using Shop.Api.Modules.Products;
 using Shop.Api.Modules.Users;
+using Shop.Api.Integrations.Inventory;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +20,7 @@ builder.Services.AddApiDocs();
 builder.Services.AddApiErrorHandling();
 builder.Services.AddJwtAuth(builder.Configuration);
 builder.Services.AddLoginRateLimiting();
+builder.Services.AddInventoryClient(builder.Configuration);
 
 builder.Services.AddNotificationsModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);

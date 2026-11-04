@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.36.2" />
+    <PackageReference Include="Grpc.Net.ClientFactory" Version="2.85.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.85.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
@@ -17,5 +23,9 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.3.1" />
   </ItemGroup>
-
+  <!-- Requirement 2: generates the C# gRPC client (InventoryService.InventoryServiceClient and the messages)
+       from the shared contract at every build. The generated code is in obj/, never edited by hand. -->
+  <ItemGroup>
+    <Protobuf Include="..\..\proto\inventory.proto" GrpcServices="Client" Link="Protos\inventory.proto" />
+  </ItemGroup>
 </Project>

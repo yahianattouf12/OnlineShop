@@ -1,6 +1,6 @@
 # Builds the image of the main application in two stages.
-# The build context is the repository root (see docker-compose.yml), so later
-# the build can also read proto/ for the gRPC contract (Requirement 2).
+# The build context is the repository root (see docker-compose.yml), so the build
+# can also read proto/ for the gRPC contract (Requirement 2).
 
 # ---------- Stage 1: build (the SDK image has the compiler and every build tool) ----------
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -10,6 +10,10 @@ WORKDIR /src
 # NuGet packages are downloaded again only when the .csproj changes, not on every code change.
 COPY app/Shop.Api/Shop.Api.csproj app/Shop.Api/
 RUN dotnet restore app/Shop.Api/Shop.Api.csproj
+
+# The gRPC contract: the build generates the C# client from it (see <Protobuf> in the .csproj).
+# Same place as in the repository, so the .csproj path ..\..\proto works here too.
+COPY proto/ proto/
 
 # Now the rest of the code, then compile into ready-to-run files in /out.
 COPY app/Shop.Api/ app/Shop.Api/
