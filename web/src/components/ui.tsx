@@ -1,7 +1,9 @@
-import { useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { useId, useState, type FormEvent, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client';
+import { productsApi } from '../api/endpoints';
 import type { OrderStatus } from '../api/types';
+import { stockLabel, stockLevel } from '../lib/stock';
 import { Icon, type IconName } from './Icon';
 
 /* ---------- Page header ---------- */
@@ -106,6 +108,99 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
       <span className="badge-dot" />
       {status}
     </span>
+  );
+}
+
+/* ---------- Stock ---------- */
+export function StockBadge({ stock }: { stock: number | null | undefined }) {
+  const level = stockLevel(stock);
+  return (
+    <span
+      className={`badge stock-${level}`}
+      title={level === 'unknown' ? 'The inventory service is not answering right now.' : undefined}
+    >
+      <span className="badge-dot" />
+      {stockLabel(stock)}
+    </span>
+  );
+}
+
+/** Admin: sets how many units are in stock. The app forwards it to the inventory service (SetStock over gRPC). */
+export function StockEditor({
+  productId,
+  productName,
+  stock,
+  onSaved,
+  compact = false,
+}: {
+  productId: string;
+  productName: string;
+  stock: number | null | undefined;
+  onSaved: (stock: number) => void;
+  compact?: boolean;
+}) {
+  const [value, setValue] = useState(stock == null ? '' : String(stock));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const id = useId();
+
+  // Follow the stock from outside (e.g. reloaded) unless the admin is typing a new value.
+  const [shown, setShown] = useState(stock);
+  if (stock !== shown) {
+    setShown(stock);
+    setValue(stock == null ? '' : String(stock));
+  }
+
+  const quantity = Number(value);
+  const valid = value.trim() !== '' && Number.isInteger(quantity) && quantity >= 0 && quantity <= 1_000_000;
+  const changed = valid && quantity !== stock;
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!valid) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const result = await productsApi.setStock(productId, quantity);
+      onSaved(result.stock);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="stack gap-xs" onSubmit={save} noValidate>
+      <label htmlFor={id} className={compact ? 'sr-only' : 'field-label'}>
+        {compact ? `Units in stock of ${productName}` : 'Units in stock'}
+      </label>
+      <div className="row gap-xs">
+        <input
+          id={id}
+          className="input tabular stock-input"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={1_000_000}
+          step={1}
+          value={value}
+          placeholder={stock === null ? '?' : '0'}
+          onChange={(e) => setValue(e.target.value)}
+          aria-invalid={(value !== '' && !valid) || undefined}
+        />
+        <button type="submit" className="btn btn-soft btn-sm" disabled={busy || !changed}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+      {value !== '' && !valid && (
+        <div className="field-error">
+          <Icon name="alert" size={14} />
+          <span>A whole number from 0 to 1,000,000.</span>
+        </div>
+      )}
+      {error != null && <ProblemNotice error={error} />}
+    </form>
   );
 }
 

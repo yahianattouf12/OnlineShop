@@ -139,7 +139,7 @@ function ResultView({ check, result }: { check: Check; result: Result }) {
   return (
     <div className="check-result">
       <div className="row gap-sm wrap">
-        <span className={`badge ${ok ? 'badge-ink' : 'badge-outline'}`}>
+        <span className={`badge ${ok ? 'badge-ink' : 'badge-error'}`}>
           <Icon name={ok ? 'check' : 'alert'} size={14} />
           {ok ? 'Rejected as expected' : 'Unexpected result'}
         </span>
