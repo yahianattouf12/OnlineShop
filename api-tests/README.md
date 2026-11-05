@@ -123,9 +123,8 @@ over gRPC, through the shared contract `proto/inventory.proto`. Every call has a
 
 1. **⭐ Race on the last unit:** `node api-tests/race-last-unit.mjs 50`. The script sets a product's stock to 1, then sends
    50 orders at the same moment (`Promise.all`). Exactly one gets `201`, the other 49 get `409`, and the stock ends at `0`.
-   Why: `inventory/src/inventory.js` checks and subtracts in **one** statement,
-   `UPDATE stock SET quantity = quantity - $2 WHERE product_id = $1 AND quantity >= $2`. PostgreSQL locks the row, so the
-   second order waits, then sees `quantity = 0`, and its `WHERE` no longer matches.
+   Sequelize locks the stock row with `SELECT FOR UPDATE` before checking and deducting the quantity in the same
+   transaction. A second order waits for the first to commit, then reads `quantity = 0` and reports a shortage.
 2. **⭐ Inventory down:** `docker compose stop inventory`, then in `6-inventory.http`:
    - product details still answer `200`, with `"stock": null`
    - an order gets `503` "The inventory service is not available right now...", in about 2 seconds, and no order is saved

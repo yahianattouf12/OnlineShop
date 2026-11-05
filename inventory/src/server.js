@@ -1,7 +1,7 @@
 const path = require('node:path');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
-const { pool, initDatabase } = require('./db');
+const { initDatabase, closeDatabase } = require('./db');
 const inventory = require('./inventory');
 
 // The same .proto file the main application uses: it is the contract between the two.
@@ -54,7 +54,7 @@ async function main() {
   // "docker compose stop" sends SIGTERM: finish the calls in progress, then exit.
   process.on('SIGTERM', () => {
     console.log('Stopping...');
-    server.tryShutdown(() => pool.end().then(() => process.exit(0)));
+    server.tryShutdown(() => closeDatabase().then(() => process.exit(0)));
   });
 }
 
