@@ -11,6 +11,7 @@ export default defineConfig({
       '/api': 'http://localhost:8080',
       '/swagger': 'http://localhost:8080',
       '/openapi': 'http://localhost:8080',
+      '/benchmark-api': 'http://localhost:8090',
     },
   },
 });

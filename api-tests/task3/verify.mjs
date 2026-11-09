@@ -114,7 +114,8 @@ async function main() {
   const productId = process.env.PRODUCT_ID?.trim().toLowerCase();
   expect(uuid.test(productId), 'Set PRODUCT_ID to a product ID in the benchmark shop.');
   const accessToken = token(mode === 'read-after-write' ? 'CUSTOMER_TOKEN' : 'ORDERS_TOKEN');
-  const api = benchmarkApi();
+  // The benchmark service (benchmark/) runs inside Docker and passes the API address; the CLI looks up the published port.
+  const api = process.env.TASK3_API_URL?.trim() || benchmarkApi();
   if (mode === 'read-after-write') await readAfterWrite(api, productId, accessToken);
   else await etagStock(api, productId, accessToken);
 }

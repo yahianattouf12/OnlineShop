@@ -1,0 +1,170 @@
+# 7. Requirement 3: the benchmark service (benchmark/), the API behind the website's Performance page.
+#    It runs the Task 3 k6 workloads from api-tests/task3 and keeps their results. Admin only.
+#
+# Start it with the benchmark project and seed it once (see api-tests/task3/README.md):
+#   docker compose -p onlineshop-bench --profile benchmark up -d --build
+#   node seed/benchmark-all.mjs 200000
+#
+# VS Code "REST Client" extension: click "Send Request" above each request. This file logs in once.
+# Put the benchmark customer's password (printed by the seeder) in api-tests/.env as BENCHMARK_CUSTOMER_PASSWORD.
+
+@baseUrl = http://localhost:8080
+@api = {{baseUrl}}/api/v1
+@bench = http://localhost:8090/benchmark-api/v1
+@adminEmail = {{$dotenv ADMIN_EMAIL}}
+@adminPassword = {{$dotenv ADMIN_PASSWORD}}
+@customerPassword = {{$dotenv BENCHMARK_CUSTOMER_PASSWORD}}
+
+
+###############################################################################
+# Open: what the service is and what it can do
+###############################################################################
+
+### The API describes itself → 200 with every route
+GET {{bench}}
+
+### Health and k6 version → 200 { "status": "ok", "k6": "k6 v2.3.0 …" }
+GET {{bench}}/health
+
+### The five workloads and the fixtures they expect → 200
+GET {{bench}}/cases
+
+
+###############################################################################
+# Auth: the shop's own admin token, checked by the shop API
+###############################################################################
+
+### Without a token → 401 Problem Details
+GET {{bench}}/results
+
+### Login admin (shop API) → 200
+# @name loginAdmin
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### A made-up token → 401 "Your session is not valid." (a real customer token gets 403 "Admins only.")
+GET {{bench}}/results
+Authorization: Bearer not.a.valid-token
+
+
+###############################################################################
+# Before a run: is the data right?
+###############################################################################
+
+### Log in the benchmark customer (needed for orders-customer) → 200. The password is in the body, never in a URL.
+POST {{bench}}/customer-session
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "password": "{{customerPassword}}"
+}
+
+### Preflight: 200,000 orders, 4,000 for the customer, stock 100, ETag or not → 200 with "cases": { …: { "ready": true } }
+GET {{bench}}/preflight
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+
+###############################################################################
+# Runs
+###############################################################################
+
+### Bad input → 400 with "field": "label"
+POST {{bench}}/runs
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "label": "not a label!",
+  "cases": ["orders-first"]
+}
+
+### Start a quick run of one workload → 202 with a Location header. Use a new label each time:
+### a saved result is never overwritten (the same label again → 409).
+# @name startRun
+POST {{bench}}/runs
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "label": "try-{{$timestamp}}",
+  "profile": "quick",
+  "cases": ["product-hot"]
+}
+
+### Starting another one while it runs → 409 "A run is already going."
+POST {{bench}}/runs
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "label": "second-{{$timestamp}}",
+  "profile": "quick",
+  "cases": ["orders-first"]
+}
+
+### Follow it (send again every few seconds): "live" has the per-second p50/p95 while it runs → 200
+GET {{bench}}/runs/{{startRun.response.body.$.id}}
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### Cancel it → 202 (or 409 once it has finished)
+POST {{bench}}/runs/{{startRun.response.body.$.id}}/cancel
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### The run history, newest first → 200
+GET {{bench}}/runs
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+
+###############################################################################
+# Results: the same files as the CLI (task3-results/<label>/<case>.json)
+###############################################################################
+
+### Every saved result, by label → 200
+GET {{bench}}/results
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### Compare "before" with the other labels: p50/p95/p99 reductions, same rules as report.mjs → 200
+GET {{bench}}/compare?baseline=before
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### Compare chosen labels only → 200
+GET {{bench}}/compare?baseline=before&labels=after-index,after-redis
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+
+###############################################################################
+# Proofs: faster must not mean stale (api-tests/task3/verify.mjs)
+###############################################################################
+
+### Proof history → 200
+GET {{bench}}/proofs
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+
+### ETag + stock edit → 200 with "passed": true once ETags exist ("passed": false, "no ETag yet" before)
+POST {{bench}}/proofs/etag-stock
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{}
+
+### Read-after-write without confirming → 400: it places a real order and changes the fixtures
+POST {{bench}}/proofs/read-after-write
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{}
+
+### Read-after-write, confirmed (run it after your last timed run) → 200 with "passed": true
+POST {{bench}}/proofs/read-after-write
+Authorization: Bearer {{loginAdmin.response.body.$.accessToken}}
+Content-Type: application/json
+
+{
+  "acceptDatasetChange": true
+}

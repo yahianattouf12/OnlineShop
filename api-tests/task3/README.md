@@ -2,6 +2,27 @@
 
 Run each workload against the same Docker project, on the same machine and with the same fixtures before and after a change. The goal is to see which requests change when you turn on each optimization.
 
+## Or use the dashboard
+
+The website has an admin **Performance** page (`/admin/performance`) for the same workloads. A `benchmark` service runs k6 inside Docker, so you don't need k6 installed. It runs the same `benchmark.js` and `verify.mjs`, and writes the same `task3-results/<label>/<case>.json` files, so `report.mjs` reads them too.
+
+```powershell
+docker compose stop                                              # free ports 8080 and 5432 if the normal shop is running
+docker compose -p onlineshop-bench --profile benchmark up -d --build
+node seed/benchmark-all.mjs 200000                               # once per benchmark volume
+```
+
+Open http://localhost:3000, log in as the admin from `.env`, then open **Performance**:
+
+- **Run**: checks the data first (200,000 orders, 4,000 for the customer, stock 100). Then you pick a label, the workloads and the length, and watch each second's p50 and p95 live. Enter the benchmark customer's password once for `orders-customer`.
+- **Compare**: shows a baseline label against the others, with a chart and table for each workload. It uses the same rules as `report.mjs` (both runs must pass, with identical workloads), and **Copy as a Markdown table** gives you the numbers for the report.
+- **Proofs**: runs `etag-stock` and `read-after-write`. The second one places a real order, so run it last.
+- **History**: lists every run, with its per-second timelines.
+
+The service's API is at `http://localhost:8090/benchmark-api/v1` (and `/benchmark-api/v1` through the website). It accepts the shop's admin token. `GET /benchmark-api/v1` lists every route, and [`api-tests/7-benchmark.http`](../7-benchmark.http) has ready requests.
+
+Dashboard runs call the API inside Docker (`http://app:8080`), while CLI runs call `localhost:8080`. Their workloads differ, so the two are never compared with each other. Measure every stage of a comparison from the same place. **Quick** runs (5 s + 20 s) are only for trying things out. Report **Standard** runs (15 s + 60 s, the same as the CLI).
+
 ## Seed the benchmark
 
 From the repository root, with Node.js 18+ and k6 2.3+ installed:

@@ -11,7 +11,8 @@ const orders = {
 const productCase = caseName === 'product-hot' || caseName === 'product-etag';
 if (!orders && !productCase) throw new Error('Select a Task 3 benchmark case with run.mjs.');
 
-const baseUrl = 'http://localhost:8080/api/v1';
+// The benchmark service (benchmark/) runs this script inside Docker and sets the API address; the CLI uses localhost.
+const baseUrl = __ENV.TASK3_BASE_URL || 'http://localhost:8080/api/v1';
 const pageSize = 10;
 const productId = __ENV.PRODUCT_ID;
 const customerId = __ENV.TASK3_CUSTOMER_ID;
@@ -96,7 +97,7 @@ export function handleSummary(data) {
   const summary = {
     case: caseName,
     workload: {
-      url, rate, duration, preAllocatedVUs, warmup: '15s',
+      url, rate, duration, preAllocatedVUs, warmup: __ENV.TASK3_WARMUP || '15s',
       role: orders?.role ?? 'anonymous',
       customerId: orders?.role === 'customer' ? customerId : null,
       expectedOrders: orders?.total ?? null,

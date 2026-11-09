@@ -63,6 +63,8 @@ It is safe to run again (existing products are skipped). For a completely clean 
 
 For all Task 3 workloads, the combined seeder, and the before-and-after report, see the [Task 3 benchmark guide](api-tests/task3/README.md).
 
+To run them from the website instead, start the benchmark project with `--profile benchmark` and open **Performance** as the admin. The guide explains the dashboard and its API ([`api-tests/7-benchmark.http`](api-tests/7-benchmark.http)).
+
 Run these commands from the project folder with your usual `.env`. The benchmark uses its own Docker project and database volume. Stop the normal API and database first so the benchmark can use ports 8080 and 5432.
 
 ```powershell
