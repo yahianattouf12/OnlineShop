@@ -8,6 +8,7 @@ const shop = require('./shop');
 const runner = require('./runner');
 const { benchmarkProductId } = require('./preflight');
 const { Problem } = require('./problem');
+const operations = require('./operations');
 
 const VERIFY = path.join(TASK3_DIR, 'verify.mjs');
 
@@ -36,6 +37,8 @@ async function run(session, mode, body = {}) {
       { field: 'acceptDatasetChange' });
   }
 
+  const release = operations.acquire('correctness proof', mode);
+  try {
   const productId = await benchmarkProductId(body.productId);
   if (!productId) throw new Problem(409, 'The benchmark product was not found.', 'Run the benchmark seeder first.');
 
@@ -75,6 +78,9 @@ async function run(session, mode, body = {}) {
     return result;
   } finally {
     running = false;
+  }
+  } finally {
+    release();
   }
 }
 

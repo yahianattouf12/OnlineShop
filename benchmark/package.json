@@ -5,6 +5,7 @@
   "description": "Benchmark service of OnlineShop (Requirement 3): runs the Task 3 k6 workloads and serves their results over HTTP",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test"
   }
 }

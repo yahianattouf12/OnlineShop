@@ -10,6 +10,7 @@ const results = require('./results');
 const shop = require('./shop');
 const { preflight } = require('./preflight');
 const { Problem } = require('./problem');
+const operations = require('./operations');
 
 const SCRIPT = path.join(TASK3_DIR, 'benchmark.js');
 const RATE = 20; // fixed in benchmark.js
@@ -227,7 +228,9 @@ async function execute(run, env) {
     run.current = null;
     run.finishedAt = new Date().toISOString();
     console.log(`Run ${run.id} (${run.label}) ${run.status}`);
+    const release = active.release;
     active = null;
+    release();
     store.save();
   }
 }
@@ -268,6 +271,8 @@ async function start(session, body = {}) {
       `The run needs about ${Math.ceil(needed / MINUTE)} min and your login ends in ${Math.max(0, Math.floor((session.expiresAt - Date.now()) / MINUTE))} min. Log out, log in again, then start it.`);
   }
 
+  const release = operations.acquire('preset benchmark', label);
+  try {
   const ready = await preflight(session, { productId, customerPassword });
   const notReady = ordered.filter((c) => !ready.cases[c].ready);
   if (notReady.length) {
@@ -307,10 +312,14 @@ async function start(session, body = {}) {
     steps: ordered.map((c) => ({ case: c, status: 'waiting', startedAt: null, finishedAt: null, metrics: null, error: null })),
   };
   store.addRun(run);
-  active = { run, child: null, live: null, cancelled: false };
+  active = { run, child: null, live: null, cancelled: false, release };
   console.log(`Run ${run.id} (${label}) started by ${run.startedBy}: ${ordered.join(', ')}`);
   execute(run, env);
   return run;
+  } catch (error) {
+    release();
+    throw error;
+  }
 }
 
 function cancel(id) {

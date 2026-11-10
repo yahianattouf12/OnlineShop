@@ -21,16 +21,18 @@ import { useToast } from '../components/Toasts';
 import { EmptyState, Notice, PageHeader, ProblemNotice, Segmented, Spinner, TextField } from '../components/ui';
 import { formatDateTime, timeAgo } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
+import { CustomTestingPanel } from './CustomTestingPanel';
 
 /**
  * Requirement 3: measure, change one thing, measure again. Everything here goes through the benchmark
  * service (benchmark/), which runs the team's k6 workloads from api-tests/task3 and keeps their results.
  */
 
-type Tab = 'run' | 'compare' | 'proofs' | 'history';
+type Tab = 'custom' | 'run' | 'compare' | 'proofs' | 'history';
 const TABS: { value: Tab; label: string }[] = [
-  { value: 'run', label: 'Run' },
-  { value: 'compare', label: 'Compare' },
+  { value: 'custom', label: 'Test studio' },
+  { value: 'run', label: 'Task 3 presets' },
+  { value: 'compare', label: 'Preset comparisons' },
   { value: 'proofs', label: 'Proofs' },
   { value: 'history', label: 'History' },
 ];
@@ -56,7 +58,7 @@ function serviceMissing(error: unknown) {
 
 export function PerformancePage() {
   const [params, setParams] = useSearchParams();
-  const tab: Tab = TABS.some((t) => t.value === params.get('tab')) ? (params.get('tab') as Tab) : 'run';
+  const tab: Tab = TABS.some((t) => t.value === params.get('tab')) ? (params.get('tab') as Tab) : 'custom';
   const setTab = (next: Tab) => {
     const search = new URLSearchParams(params);
     search.set('tab', next);
@@ -68,10 +70,10 @@ export function PerformancePage() {
   const up = health.data && typeof health.data === 'object' && health.data.status === 'ok';
 
   return (
-    <main className="main">
+    <main className="main performance-page">
       <PageHeader
         title="Performance."
-        lead="Requirement 3: measure, change one thing, measure again. Each run sends 20 requests per second to the shop API with k6 and records p50, p95 and p99."
+        lead="Configure requests and test data, measure your backend, and compare the results after each optimization."
         actions={up ? <Segmented label="Section" options={TABS} value={tab} onChange={setTab} /> : undefined}
       />
 
@@ -87,14 +89,15 @@ export function PerformancePage() {
         <Spinner />
       ) : (
         <>
+          {tab === 'custom' && <CustomTestingPanel />}
           {tab === 'run' && <RunTab meta={meta.data} runningRunId={health.data!.runningRunId} />}
           {tab === 'compare' && <CompareTab meta={meta.data} onRun={() => setTab('run')} />}
           {tab === 'proofs' && <ProofsTab />}
           {tab === 'history' && <HistoryTab meta={meta.data} />}
-          <p className="caption muted" style={{ marginTop: 'var(--space-xl)' }}>
+          {tab !== 'custom' && <p className="caption muted" style={{ marginTop: 'var(--space-xl)' }}>
             {health.data!.k6} · calls {health.data!.appUrl} inside Docker · results in task3-results/, readable by{' '}
             <span className="mono">node api-tests/task3/report.mjs</span>
-          </p>
+          </p>}
         </>
       )}
     </main>

@@ -6,4 +6,5 @@
 .vs/
 .vscode/
 .idea/
-**/node_modules/task3-results/
+**/node_modules/
+task3-results/
