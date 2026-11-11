@@ -114,11 +114,19 @@ public class OrdersService
             orders = orders.Where(o => o.Status == status);
 
         var totalCount = await orders.CountAsync(ct);
-        var items = await orders
+
+        // Pick the page first. Counting items in the same query made PostgreSQL count them for every
+        // skipped order too (100,000 of them on page 10,000); now only the 10 returned orders are counted.
+        var page = orders
             .OrderByDescending(o => o.CreatedAt)
             .ThenBy(o => o.Id)
             .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
+            .Take(query.PageSize);
+
+        // Apply the final ordering outside the paginated subquery.
+        var items = await page
+            .OrderByDescending(o => o.CreatedAt)
+            .ThenBy(o => o.Id)
             .Select(o => new OrderSummaryResponse(o.Id, o.UserId, o.Status, o.TotalAmount, o.Items.Count, o.CreatedAt))
             .ToListAsync(ct);
 
