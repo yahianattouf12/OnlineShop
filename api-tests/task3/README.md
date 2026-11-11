@@ -74,7 +74,25 @@ On a fresh label, omitting the cases runs all five. Each case gets a separate 15
 
 **Query plan and N+1.** Watch EF's SQL with `docker compose -p onlineshop-bench logs -f app`. Make individual order-list calls in Swagger and capture the count and page SELECT with their parameter values. Compare page 1 and page 10,000 using `EXPLAIN (ANALYZE, BUFFERS)` in `docker compose -p onlineshop-bench exec app-db psql -U admin -d db_online_shop`. Save both plans before and after. For the N+1 check, make isolated calls with page sizes 10 and 50 and count the SQL commands per call. The current list is a count plus a projection query. A query count that stays flat as the page grows is evidence against an N+1 on that path.
 
-**Read replica.** Repeat the admin workload routed to the replica with other optimizations held constant. Record evidence that the request actually used the standby, such as API route logs and PostgreSQL standby metrics. After the timing runs, use the order proof below. To demonstrate the consistency guarantee under lag, pause replay on the isolated test standby, confirm replay is paused, run the proof, verify the new ID is still absent on the standby, and resume replay.
+**Read replica.** Set a separate `APP_DB_REPLICATION_PASSWORD` in `.env`, then enable the Compose override from the repository root:
+
+```powershell
+docker compose -p onlineshop-bench -f docker-compose.yml -f docker-compose.replica.yml --profile benchmark up -d --build
+```
+
+The standby copies the existing primary into its own volume on first startup. The API sends admin order lists to the standby. Customer order lists, order details, writes, and migrations use the primary.
+
+```powershell
+docker exec onlineshop-bench-app-db-replica-1 psql -X -U admin -d db_online_shop -c "SELECT pg_is_in_recovery(); SELECT status, sender_host FROM pg_stat_wal_receiver;"
+```
+
+Look for `t` and `streaming`. Send one admin order-list preview in Test studio, then check the standby's connections for the request:
+
+```powershell
+docker exec onlineshop-bench-app-db-replica-1 psql -X -U admin -d db_online_shop -c "SELECT application_name, state, left(query, 140) AS query FROM pg_stat_activity WHERE application_name = 'onlineshop-orders-read';"
+```
+
+Save the result showing the admin order-list query on the standby. After the timing runs, use the order proof below. To demonstrate the consistency guarantee under lag, pause replay on the isolated test standby, confirm replay is paused, run the proof, verify the new ID is still absent on the standby, and resume replay.
 
 **Redis.** Repeat `product-hot` with Redis enabled and verify that repeated requests hit the metadata cache. Record the cache hit evidence, configured expiry, and the TTL you observe. Use an actual metadata edit such as a price change, then make an immediate GET of the warmed product and check the new price. The current API only has a stock edit; the price or other metadata edit proof needs the corresponding route when implemented. Stock still comes from inventory.
 

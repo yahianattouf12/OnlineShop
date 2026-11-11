@@ -1,0 +1,39 @@
+# Enable with -f docker-compose.yml -f docker-compose.replica.yml.
+services:
+  app:
+    environment:
+      ConnectionStrings__OrdersReadReplica: Host=app-db-replica;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable;Application Name=onlineshop-orders-read
+    depends_on:
+      app-db-replica:
+        condition: service_healthy
+
+  app-db:
+    command: ["postgres", "-c", "hba_file=/etc/postgresql/shop-pg_hba.conf", "-c", "wal_level=replica", "-c", "wal_keep_size=256MB"]
+    volumes:
+      - ./deploy/postgres/pg_hba.conf:/etc/postgresql/shop-pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "admin", "-d", "db_online_shop"]
+
+  app-db-replica:
+    image: postgres:17
+    entrypoint: ["/bin/sh", "/opt/shop/start-replica.sh"]
+    environment:
+      PGDATA: /var/lib/postgresql/data/standby
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      APP_DB_REPLICATION_PASSWORD: ${APP_DB_REPLICATION_PASSWORD:?Set APP_DB_REPLICATION_PASSWORD in .env}
+    volumes:
+      - app-db-replica-data:/var/lib/postgresql/data
+      - ./deploy/postgres/start-replica.sh:/opt/shop/start-replica.sh:ro
+      - ./deploy/postgres/pg_hba.conf:/etc/postgresql/shop-pg_hba.conf:ro
+    depends_on:
+      app-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test \"$$(psql -X -U admin -d db_online_shop -tAc \"SELECT pg_is_in_recovery() AND EXISTS (SELECT 1 FROM pg_stat_wal_receiver WHERE status = 'streaming')\")\" = t"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 15s
+
+volumes:
+  app-db-replica-data:
