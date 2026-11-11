@@ -24,6 +24,16 @@ public static class ProductsModule
 
         services.AddHostedService<DatabaseMigrator<ProductsDbContext>>();
         services.AddScoped<ProductsService>();
+
+        var redisConfiguration = configuration["Redis:Configuration"];
+        if (!string.IsNullOrWhiteSpace(redisConfiguration))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConfiguration;
+                options.InstanceName = "onlineshop:";
+            });
+        }
         
         // The only thing other modules may use from this module.
         services.AddScoped<IProductCatalog, ProductCatalog>();

@@ -94,7 +94,24 @@ docker exec onlineshop-bench-app-db-replica-1 psql -X -U admin -d db_online_shop
 
 Save the result showing the admin order-list query on the standby. After the timing runs, use the order proof below. To demonstrate the consistency guarantee under lag, pause replay on the isolated test standby, confirm replay is paused, run the proof, verify the new ID is still absent on the standby, and resume replay.
 
-**Redis.** Repeat `product-hot` with Redis enabled and verify that repeated requests hit the metadata cache. Record the cache hit evidence, configured expiry, and the TTL you observe. Use an actual metadata edit such as a price change, then make an immediate GET of the warmed product and check the new price. The current API only has a stock edit; the price or other metadata edit proof needs the corresponding route when implemented. Stock still comes from inventory.
+**Redis.** The product detail endpoint caches product metadata for 60 seconds. It reads stock live from inventory and evicts the metadata entry after a successful stock edit. The API falls back to PostgreSQL for metadata if Redis is unavailable.
+
+To isolate the Redis effect, save a Standard `product-hot` run as `before-redis` using the same API build with the cache override omitted. Then enable Redis and recreate the API:
+
+```powershell
+docker compose -p onlineshop-bench -f docker-compose.yml -f docker-compose.replica.yml -f docker-compose.cache.yml --profile benchmark up -d --build app
+```
+
+Keep the same benchmark product at stock 100. Run Standard `product-hot` as `after-redis` and compare it to `before-redis`. For cache evidence, set `$productId` to that product's UUID, then use these commands:
+
+```powershell
+$cacheKey = "onlineshop:product:metadata:v1:$productId"
+docker exec onlineshop-bench-redis-1 redis-cli TTL $cacheKey
+docker exec onlineshop-bench-redis-1 redis-cli INFO stats | Select-String '^keyspace_hits:'
+docker exec onlineshop-bench-redis-1 redis-cli EXISTS $cacheKey
+```
+
+Send an ordinary product detail GET to populate the entry. Its TTL should be positive and at most 60 seconds. Compare the hit counter before and after repeated GETs. Change stock through the admin stock endpoint, then check `EXISTS` before making another product detail GET. It should return `0`. The next GET should show the new stock and recreate the entry. Restore stock to 100 for any further product benchmarks.
 
 **ETag.** After the feature exists, use the `--etag` flag for the conditional case. The runner fetches the current ETag outside the timed run. The before run sends an unmatched validator and expects a full 200; the after run sends the matching validator and requires an empty 304. The separate stock edit proof below checks that a changed representation is immediately visible when the old tag is sent.
 

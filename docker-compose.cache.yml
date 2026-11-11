@@ -1,0 +1,17 @@
+# Enable with -f docker-compose.yml -f docker-compose.cache.yml.
+services:
+  app:
+    environment:
+      Redis__Configuration: redis:6379,abortConnect=false,connectRetry=1,connectTimeout=1000,syncTimeout=1000,asyncTimeout=1000
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10

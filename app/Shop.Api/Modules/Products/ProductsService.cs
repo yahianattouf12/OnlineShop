@@ -1,30 +1,38 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Shop.Api.Common;
 using Shop.Api.Common.Errors;
 using Shop.Api.Common.Paging;
 using Shop.Api.Common.Storage;
 using Shop.Api.Integrations.Inventory;
 using Shop.Api.Modules.Products.Dtos;
+using StackExchange.Redis;
 
 namespace Shop.Api.Modules.Products;
 
 public class ProductsService
 {
+    private static readonly TimeSpan MetadataCacheLifetime = TimeSpan.FromSeconds(60);
+
     private readonly ProductsDbContext _db;
     private readonly IImageStorage _imageStorage;
     private readonly IInventoryService _inventory; // the stock lives in the inventory service, not in our database
     private readonly ILogger<ProductsService> _logger;
+    private readonly IDistributedCache? _metadataCache;
 
     public ProductsService(
         ProductsDbContext db,
         IImageStorage imageStorage,
         IInventoryService inventory,
-        ILogger<ProductsService> logger)
+        ILogger<ProductsService> logger,
+        IDistributedCache? metadataCache = null)
     {
         _db = db;
         _imageStorage = imageStorage;
         _inventory = inventory;
         _logger = logger;
+        _metadataCache = metadataCache;
     }
 
     public async Task<ProductResponse> CreateAsync(CreateProductRequest request, CancellationToken ct)
@@ -86,7 +94,7 @@ public class ProductsService
 
     public async Task<ProductResponse> GetByIdAsync(Guid id, CancellationToken ct)
     {
-        var product = await FindAsync(id, ct);
+        var metadata = await GetProductMetadataAsync(id, ct);
 
         // Ask the inventory service how many are left. If it is down or too slow, the product page
         // still works: we show the product without its stock (null) instead of failing the whole page.
@@ -100,7 +108,7 @@ public class ProductsService
             stock = null;
         }
 
-        return ToResponse(product) with { Stock = stock };
+        return metadata with { Stock = stock };
     }
 
     public async Task<StockResponse> SetStockAsync(Guid id, int quantity, CancellationToken ct)
@@ -108,6 +116,7 @@ public class ProductsService
         await FindAsync(id, ct); // 404 for a product that does not exist
 
         var stock = await _inventory.SetStockAsync(id, quantity, ct);
+        await InvalidateProductMetadataAsync(id);
         _logger.LogInformation("Stock of product {ProductId} set to {Stock}", id, stock);
         return new StockResponse(id, stock);
     }
@@ -119,6 +128,59 @@ public class ProductsService
             ?? throw new NotFoundException($"The image of product {id} was not found.");
         return (stream, product.ImageContentType);
     }
+
+    private async Task<ProductResponse> GetProductMetadataAsync(Guid id, CancellationToken ct)
+    {
+        if (_metadataCache is null)
+            return ToResponse(await FindAsync(id, ct));
+
+        var key = MetadataCacheKey(id);
+        try
+        {
+            var cached = await _metadataCache.GetAsync(key, ct);
+            if (cached is not null && JsonSerializer.Deserialize<ProductResponse>(cached) is { } metadata)
+                return metadata;
+        }
+        catch (Exception error) when (error is RedisException or TimeoutException or JsonException)
+        {
+            _logger.LogWarning(error, "Could not read cached metadata for product {ProductId}", id);
+            return ToResponse(await FindAsync(id, ct));
+        }
+
+        var product = ToResponse(await FindAsync(id, ct));
+        try
+        {
+            var options = new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = MetadataCacheLifetime,
+            };
+            await _metadataCache.SetAsync(key, JsonSerializer.SerializeToUtf8Bytes(product), options, ct);
+        }
+        catch (Exception error) when (error is RedisException or TimeoutException)
+        {
+            _logger.LogWarning(error, "Could not cache metadata for product {ProductId}", id);
+        }
+
+        return product;
+    }
+
+    private async Task InvalidateProductMetadataAsync(Guid id)
+    {
+        if (_metadataCache is null)
+            return;
+
+        try
+        {
+            // The inventory write succeeded. Attempt eviction even if the client disconnects.
+            await _metadataCache.RemoveAsync(MetadataCacheKey(id), CancellationToken.None);
+        }
+        catch (Exception error) when (error is RedisException or TimeoutException)
+        {
+            _logger.LogWarning(error, "Could not evict cached metadata for product {ProductId}", id);
+        }
+    }
+
+    private static string MetadataCacheKey(Guid id) => $"product:metadata:v1:{id:D}";
 
     private async Task<Product> FindAsync(Guid id, CancellationToken ct) =>
         await _db.Products.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id, ct)
