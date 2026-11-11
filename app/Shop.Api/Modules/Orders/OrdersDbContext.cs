@@ -25,6 +25,10 @@ public class OrdersDbContext : DbContext
 
             entity.HasIndex(o => o.UserId); // "my orders" is the most common query
             entity.HasIndex(o => o.CreatedAt);
+            // Matches the admin order list's ORDER BY "CreatedAt" DESC, "Id", so a deep page can walk the index
+            // in order instead of sorting each group of equal CreatedAt values (Task 3 experiment).
+            entity.HasIndex(o => new { o.CreatedAt, o.Id })
+                .IsDescending(true, false);
 
             // Foreign keys inside the module are fine.
             entity.HasMany(o => o.Items).WithOne().HasForeignKey(i => i.OrderId).OnDelete(DeleteBehavior.Cascade);
