@@ -113,6 +113,19 @@ docker exec onlineshop-bench-redis-1 redis-cli EXISTS $cacheKey
 
 Send an ordinary product detail GET to populate the entry. Its TTL should be positive and at most 60 seconds. Compare the hit counter before and after repeated GETs. Change stock through the admin stock endpoint, then check `EXISTS` before making another product detail GET. It should return `0`. The next GET should show the new stock and recreate the entry. Restore stock to 100 for any further product benchmarks.
 
+**Redis product list.** `GET /api/v1/products?category=&page=&pageSize=` is the shop's most-read request: the home page and the category filter, the same for every visitor. Each page is cached in Redis for 60 seconds under `product:list:v1:<generation>:<category>:<page>:<pageSize>`. The list holds no stock, so nothing in it changes when stock changes. Adding a product writes a new value to `product:list:generation` after the row is saved. Every list key then has a new name, so the next request reads PostgreSQL and the new product appears at once, and the old pages expire on their own. If Redis is unavailable, the API reads the list from PostgreSQL.
+
+What is not cached: stock (it changes with every order and must be exact), a customer's own orders and notifications (personal, and they must see their own writes at once), and anything about login.
+
+To measure it, add catalog volume in Test studio's data preparation without touching the order fixture: 0 orders and 20,000 products. In Test studio, run the same scenario twice, first without `docker-compose.cache.yml` as `before-list-cache`, then with it as `after-list-cache`. The scenario is anonymous `GET /api/v1/products` with `page=1, pageSize=12` and with `category=studio-3, page=50, pageSize=12`, at 20 iterations per second for 60 s after a 15 s warm-up. Then compare the two runs.
+
+```powershell
+docker exec onlineshop-bench-redis-1 redis-cli HGET onlineshop:product:list:generation data
+docker exec onlineshop-bench-redis-1 redis-cli --scan --pattern 'onlineshop:product:list:v1:*'
+```
+
+To prove an addition shows up at once, read page 1, add a product as the admin, and read page 1 again immediately. The new product is first, and the generation value has changed. Data inserted directly with SQL (Test studio's fixtures) skips this invalidation. After preparing data, wait 60 seconds or restart Redis before measuring.
+
 **ETag.** After the feature exists, use the `--etag` flag for the conditional case. The runner fetches the current ETag outside the timed run. The before run sends an unmatched validator and expects a full 200; the after run sends the matching validator and requires an empty 304. The separate stock edit proof below checks that a changed representation is immediately visible when the old tag is sent.
 
 Example stage commands to run **after** implementing each change:
