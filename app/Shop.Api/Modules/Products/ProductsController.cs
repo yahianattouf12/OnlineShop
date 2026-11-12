@@ -1,5 +1,9 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Shop.Api.Common;
 using Shop.Api.Common.Auth;
 using Shop.Api.Common.Paging;
@@ -13,10 +17,12 @@ namespace Shop.Api.Modules.Products;
 public class ProductsController : ControllerBase
 {
     private readonly ProductsService _productsService;
+    private readonly JsonSerializerOptions _jsonOptions;
 
-    public ProductsController(ProductsService productsService)
+    public ProductsController(ProductsService productsService, IOptions<JsonOptions> jsonOptions)
     {
         _productsService = productsService;
+        _jsonOptions = jsonOptions.Value.JsonSerializerOptions;
     }
 
     /// <summary>Adds a product with its image (admin only).</summary>
@@ -39,8 +45,28 @@ public class ProductsController : ControllerBase
 
     /// <summary>One product, with how many units are in stock (asked from the inventory service).</summary>
     [HttpGet("{id:guid}")]
-    public Task<ProductResponse> GetById(Guid id, CancellationToken ct) =>
-        _productsService.GetByIdAsync(id, ct);
+    [ProducesResponseType<ProductResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status304NotModified)]
+    public async Task<ActionResult<ProductResponse>> GetById(Guid id, CancellationToken ct)
+    {
+        var product = await _productsService.GetByIdAsync(id, ct);
+        var json = JsonSerializer.SerializeToUtf8Bytes(product, _jsonOptions);
+        var hash = Convert.ToHexString(SHA256.HashData(json));
+        var etag = new EntityTagHeaderValue($"\"{hash}\"", isWeak: true);
+
+        var headers = Response.GetTypedHeaders();
+        headers.ETag = etag;
+        headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+
+        if (Request.GetTypedHeaders().IfNoneMatch.Any(candidate =>
+                candidate.Equals(EntityTagHeaderValue.Any) ||
+                candidate.Compare(etag, useStrongComparison: false)))
+        {
+            return StatusCode(StatusCodes.Status304NotModified);
+        }
+
+        return Ok(product);
+    }
 
     /// <summary>Sets how many units of the product are in stock (admin only).</summary>
     [HttpPut("{id:guid}/stock")]

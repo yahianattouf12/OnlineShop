@@ -59,6 +59,39 @@ docker compose --profile seed run --rm seed
 
 It is safe to run again (existing products are skipped). For a completely clean start: `docker compose down -v` (deletes all local data), `docker compose up -d`, then seed.
 
+## Requirement 3: prepare the order benchmark
+
+For all Task 3 workloads, the combined seeder, and the before-and-after report, see the [Task 3 benchmark guide](api-tests/task3/README.md).
+
+To run them from the website instead, start the benchmark project with `--profile benchmark` and open **Performance** as the admin. The guide explains the dashboard and its API ([`api-tests/7-benchmark.http`](api-tests/7-benchmark.http)).
+
+Run these commands from the project folder with your usual `.env`. The benchmark uses its own Docker project and database volume. Stop the normal API and database first so the benchmark can use ports 8080 and 5432.
+
+```powershell
+docker compose stop app app-db
+docker compose -p onlineshop-bench up -d --build app
+```
+
+Once [Swagger](http://localhost:8080/swagger) opens, seed a small sample with Node.js 18 or newer:
+
+```bash
+node seed/benchmark-orders.mjs 100
+```
+
+The command creates `benchmark-customer@example.invalid` through the benchmark API and prints a generated test password. Save that password to log in later. If the account already exists, the command reuses it with its existing password. Each teammate can run the same command on a fresh benchmark volume.
+
+On a fresh benchmark database the seed prints 100 orders across 99 customers, with 2 orders for the benchmark customer. In Swagger, call `GET /api/v1/orders?page=1&pageSize=10` as the admin from `.env` and check `totalCount: 100`. Log in as the benchmark customer, replace the admin token in Swagger, and check `totalCount: 2`. Open one of those orders by ID to see its items and status history.
+
+After the sample works, run `node seed/benchmark-orders.mjs 200000`. The seed uses stable IDs, so rerunning it adds only missing rows. On a fresh benchmark dataset this gives 200,000 orders in total and 4,000 for the benchmark customer. The script also refreshes PostgreSQL's planner statistics. Run the [catalog smoke test](api-tests/smoke.js) with `k6 run api-tests/smoke.js` if you want to verify k6 can reach the API.
+
+To switch back to the normal shop:
+
+```powershell
+docker compose -p onlineshop-bench down
+docker compose up -d
+```
+
+The benchmark data stays in its separate volume for the next run.
 
 ## Run it locally (for development)
 

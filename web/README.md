@@ -34,6 +34,7 @@ npm run dev        # http://localhost:5173, /api is forwarded to http://localhos
 | Admin | All orders (with customer emails) | `/admin/orders` |
 | Admin | Add a product with its image | `/admin/products/new` |
 | Admin | Users | `/admin/users` |
+| Admin | Performance (Requirement 3): runs the k6 workloads through the benchmark service, live charts, before/after comparison, proofs | `/admin/performance` |
 
 Errors from the API are always Problem Details, so the site shows them the same way everywhere:
 422 next to the right form field, 404/403 as a page, 401 sends you to log in, 429 on login shows a countdown.

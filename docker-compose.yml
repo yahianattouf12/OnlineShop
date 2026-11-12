@@ -27,6 +27,8 @@ services:
       Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       # The inventory service, by its service name. gRPC over plain HTTP/2 inside the Docker network.
       Inventory__Address: http://inventory:50051
+      # The telemetry controller answers only in the dedicated benchmark project.
+      Benchmark__Project: ${COMPOSE_PROJECT_NAME:-onlineshop}
     volumes:
       - uploads:/app/uploads     # product images survive when the container is removed
     # No depends_on for inventory on purpose: the app must start and answer clearly even when inventory is down.
@@ -93,6 +95,28 @@ services:
     command: ["node", "seed.mjs"]
     depends_on:
       - app
+
+  # Requirement 3: runs the Task 3 k6 workloads and serves their results (admin only), for the
+  # Performance page of the website. Not started by "docker compose up"; start it with the benchmark project:
+  #   docker compose -p onlineshop-bench --profile benchmark up -d --build
+  benchmark:
+    build:
+      context: .                 # the repository root, so the image can COPY api-tests/task3
+      dockerfile: benchmark/Dockerfile
+    profiles: ["benchmark"]
+    ports:
+      - "8090:8090"              # the benchmark API, for api-tests/7-benchmark.http
+    environment:
+      APP_URL: http://app:8080   # k6 calls the API inside the Docker network, not through localhost
+      # Fixture writes are rejected unless this exact project is onlineshop-bench.
+      BENCHMARK_PROJECT: ${COMPOSE_PROJECT_NAME:-onlineshop}
+      BENCHMARK_APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      BENCHMARK_INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD}
+    volumes:
+      - ./task3-results:/results # the same folder the CLI scripts write, so report.mjs reads both
+    depends_on:
+      - app
+      - inventory
 
 volumes:
   app-db-data:

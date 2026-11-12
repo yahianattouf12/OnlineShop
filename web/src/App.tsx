@@ -8,6 +8,7 @@ import { CartPage } from './pages/CartPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { OrderDetailPage } from './pages/OrderDetailPage';
 import { OrdersPage } from './pages/OrdersPage';
+import { PerformancePage } from './pages/PerformancePage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { SecurityPage } from './pages/SecurityPage';
@@ -48,6 +49,7 @@ export function App() {
         <Route path="admin/orders" element={<RequireAuth role="Admin"><OrdersPage admin /></RequireAuth>} />
         <Route path="admin/products/new" element={<RequireAuth role="Admin"><AddProductPage /></RequireAuth>} />
         <Route path="admin/users" element={<RequireAuth role="Admin"><UsersPage /></RequireAuth>} />
+        <Route path="admin/performance" element={<RequireAuth role="Admin"><PerformancePage /></RequireAuth>} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -49,6 +49,8 @@ interface RequestOptions {
   form?: FormData;
   /** Overrides the stored token: a specific token, or null to send none. */
   token?: string | null;
+  /** Another API on the same site, e.g. the benchmark service (default: the shop API). */
+  base?: string;
   signal?: AbortSignal;
 }
 
@@ -65,7 +67,7 @@ async function send(path: string, options: RequestOptions) {
     body = JSON.stringify(options.body);
   }
 
-  const response = await fetch(API_BASE + path, {
+  const response = await fetch((options.base ?? API_BASE) + path, {
     method: options.method ?? 'GET',
     headers,
     body,
@@ -110,7 +112,7 @@ export async function exchange(path: string, options: RequestOptions = {}): Prom
   });
   return {
     method: options.method ?? 'GET',
-    url: API_BASE + path,
+    url: (options.base ?? API_BASE) + path,
     requestBody: options.body,
     status: response.status,
     statusText: response.statusText,

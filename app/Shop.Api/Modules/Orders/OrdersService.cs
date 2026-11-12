@@ -12,6 +12,7 @@ namespace Shop.Api.Modules.Orders;
 public class OrdersService
 {
     private readonly OrdersDbContext _db;
+    private readonly OrdersDbContext _adminReadDb;
     private readonly IProductCatalog _productCatalog; // the Products module's public door, NOT ProductsDbContext
     private readonly IInventoryService _inventory; // the inventory service, over gRPC
 
@@ -21,6 +22,7 @@ public class OrdersService
 
     public OrdersService(
         OrdersDbContext db,
+        [FromKeyedServices(OrdersModule.AdminReadDatabase)] OrdersDbContext adminReadDb,
         IProductCatalog productCatalog,
         INotificationService notifications,
         IInventoryService inventory,
@@ -28,6 +30,7 @@ public class OrdersService
         ILogger<OrdersService> logger)
     {
         _db = db;
+        _adminReadDb = adminReadDb;
         _productCatalog = productCatalog;
         _notifications = notifications;
         _inventory = inventory;
@@ -106,25 +109,41 @@ public class OrdersService
         return ToResponse(order);
     }
 
-    public async Task<PagedResponse<OrderSummaryResponse>> ListAsync(OrderQuery query, CancellationToken ct)
+    public async Task<PagedResponse<OrderSummaryResponse>> ListAsync(
+        OrderQuery query, CancellationToken ct)
     {
-        var orders = VisibleOrders();
+        // The standby can lag. A customer must see their own newly created orders.
+        var orders = _currentUser.IsAdmin
+            ? _adminReadDb.Orders.AsNoTracking().TagWith("Admin order list")
+            : VisibleOrders();
 
         if (query.Status is { } status)
             orders = orders.Where(o => o.Status == status);
 
         var totalCount = await orders.CountAsync(ct);
-        var items = await orders
+
+        var page = orders
             .OrderByDescending(o => o.CreatedAt)
             .ThenBy(o => o.Id)
             .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
-            .Select(o => new OrderSummaryResponse(o.Id, o.UserId, o.Status, o.TotalAmount, o.Items.Count, o.CreatedAt))
+            .Take(query.PageSize);
+
+        // Apply the final ordering outside the paginated subquery.
+        var items = await page
+            .OrderByDescending(o => o.CreatedAt)
+            .ThenBy(o => o.Id)
+            .Select(o => new OrderSummaryResponse(
+                o.Id,
+                o.UserId,
+                o.Status,
+                o.TotalAmount,
+                o.Items.Count,
+                o.CreatedAt))
             .ToListAsync(ct);
 
-        return PagedResponse<OrderSummaryResponse>.Create(items, query.Page, query.PageSize, totalCount);
+        return PagedResponse<OrderSummaryResponse>.Create(
+            items, query.Page, query.PageSize, totalCount);
     }
-
     public async Task<OrderResponse> GetByIdAsync(Guid id, CancellationToken ct)
     {
         // VisibleOrders() already hides other customers' orders, so for them this is simply "not found".

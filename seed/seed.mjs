@@ -21,10 +21,13 @@ if (existsSync(rootEnv)) {
 }
 
 const API = (process.env.API_URL ?? 'http://localhost:8080') + '/api/v1';
-const { ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
+const { ADMIN_EMAIL, ADMIN_PASSWORD, BENCHMARK_STOCK } = process.env;
 if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
   console.error('ADMIN_EMAIL and ADMIN_PASSWORD are required (from .env).');
   process.exit(1);
+}
+if (BENCHMARK_STOCK !== undefined && (!/^\d+$/.test(BENCHMARK_STOCK) || Number(BENCHMARK_STOCK) > 1_000_000)) {
+  throw new Error('BENCHMARK_STOCK must be an integer from 0 to 1000000.');
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -49,24 +52,32 @@ async function login() {
   }
 }
 
-async function existingNames() {
-  const names = new Set();
+async function existingProducts() {
+  const productsByName = new Map();
   for (let page = 1; ; page++) {
     const res = await fetch(`${API}/products?page=${page}&pageSize=50`);
+    if (!res.ok) throw new Error(`Listing existing products failed (${res.status}).`);
     const data = await res.json();
-    data.items.forEach((p) => names.add(p.name.toLowerCase()));
-    if (page >= data.totalPages) return names;
+    for (const product of data.items) {
+      const name = product.name.toLowerCase();
+      if (!productsByName.has(name)) productsByName.set(name, product.id);
+    }
+    if (page >= data.totalPages) return productsByName;
   }
 }
 
 const products = JSON.parse(await readFile(join(here, 'products.json'), 'utf8'));
 const token = await login();
-const existing = await existingNames();
+const existing = await existingProducts();
+const benchmarkProduct = products[0];
+const benchmarkProductName = benchmarkProduct.name.toLowerCase();
+let benchmarkProductId = existing.get(benchmarkProductName);
 let added = 0;
 
 // The shop lists newest first, so add them in reverse to show them in the order of products.json.
 for (const product of [...products].reverse()) {
-  if (existing.has(product.name.toLowerCase())) {
+  const name = product.name.toLowerCase();
+  if (existing.has(name)) {
     console.log(`skip   ${product.name} (already in the shop)`);
     continue;
   }
@@ -82,8 +93,23 @@ for (const product of [...products].reverse()) {
     console.error(`FAILED ${product.name}: ${res.status} ${await res.text()}`);
     process.exit(1);
   }
+  if (BENCHMARK_STOCK !== undefined && name === benchmarkProductName) {
+    benchmarkProductId = (await res.json()).id;
+  }
   added++;
   console.log(`added  ${product.name}`);
+}
+
+if (BENCHMARK_STOCK !== undefined) {
+  if (!benchmarkProductId) throw new Error(`Could not find the product ID for ${benchmarkProduct.name}.`);
+  const res = await fetch(`${API}/products/${benchmarkProductId}/stock`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: Number(BENCHMARK_STOCK) }),
+  });
+  if (!res.ok) throw new Error(`Setting stock for ${benchmarkProduct.name} failed (${res.status}): ${await res.text()}`);
+  console.log(`Set stock for ${benchmarkProduct.name} to ${BENCHMARK_STOCK}.`);
+  console.log(`PRODUCT_ID=${benchmarkProductId}`);
 }
 
 console.log(`\nDone: ${added} added, ${products.length - added} already there.`);

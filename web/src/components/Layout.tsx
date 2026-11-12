@@ -54,6 +54,9 @@ function NavItems() {
           <NavLink to="/admin/users" className={linkClass}>
             Users
           </NavLink>
+          <NavLink to="/admin/performance" className={linkClass}>
+            Performance
+          </NavLink>
         </>
       )}
       {user && (

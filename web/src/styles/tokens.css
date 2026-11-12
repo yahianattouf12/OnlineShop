@@ -13,6 +13,10 @@
   --color-text-faint: #adadad;
   --color-on-primary: #ffffff;
   --color-accent: #0066ff; /* commercial signals only, never CTAs */
+  --color-error: #d92d20; /* errors only: invalid field outlines, error icons */
+  --color-error-text: #b42318; /* error text, 6.5:1 on white and on --color-error-soft */
+  --color-error-soft: #fef3f2;
+  --color-error-hairline: #fecdca;
   --color-overlay: rgba(115, 115, 115, 0.56);
 
   /* Type */
