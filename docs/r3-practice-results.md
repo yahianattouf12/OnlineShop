@@ -161,3 +161,41 @@ new list generation. Proof (`node api-tests/r3/proof-edit.mjs`, Redis on):
 
 PROOF OK: the edit shows at once, in the details and in the list.
 ```
+
+## D10. Read replica for the admin order list
+
+PostgreSQL streaming replication: `app-db-replica` is a copy made with `pg_basebackup -R -X stream`, then it
+replays every change (WAL) of `app-db`. Turn it on with `docker-compose.replica.yml`.
+The app has a second `OrdersDbContext` (a keyed service, `orders-read-replica`). Only the admin's list of
+ALL orders reads from it. A customer's own list, the order details and every write stay on the primary.
+
+```
+replica:  pg_is_in_recovery = t, status = streaming; 200,000 orders; CREATE TABLE -> ERROR: read-only transaction
+primary:  pg_stat_replication -> walreceiver | streaming | async
+```
+
+Proof of read-your-own-writes (`node api-tests/r3/proof-replica.mjs`, replica paused with `pg_wal_replay_pause()`):
+
+```
+1. customer placed order ee7cd535
+2. customer's own list (primary):  sees the new order? true
+3. admin's list (replica):        total 200000 -> 200000
+
+PROOF OK: the replica is behind (paused), the admin list does not have the order yet, but the customer sees it.
+```
+After `pg_wal_replay_resume()` the admin list shows 200,001 within a second.
+
+- On one PC the replica does not make a single query faster; it moves the heavy admin reads off the primary,
+  so they do not take the primary's connections and CPU from the customers' orders.
+
+## D11. Final numbers, everything on (index + Redis + ETag + replica), 50 requests/second
+
+| Endpoint | p50 before (D2) | p50 after | p95 before | p95 after | p99 before | p99 after | req/s before → after |
+|---|---|---|---|---|---|---|---|
+| `GET /products?page=1&pageSize=12` | 2.93 ms | 2.52 ms | 9.97 ms | 4.52 ms | 11.16 ms | 10.43 ms | 50 → 50 |
+| `GET /products/{id}` | 3.90 ms | 3.86 ms | 13.29 ms | 6.36 ms | 14.84 ms | 14.50 ms | 50 → 50 |
+| `GET /orders?page=1` (admin) | 10.88 ms | 11.23 ms | 18.03 ms | 14.88 ms | 32.28 ms | 20.83 ms | 50 → 50 |
+| **`GET /orders?page=10000` (admin)** | **12.03 s** | **57.03 ms** | **16.19 s** | **70.18 ms** | **16.81 s** | **90.17 ms** | **19.5 → 50** (662 dropped → 0) |
+| `GET /orders?page=1` (customer) | 4.08 ms | 4.08 ms | 13.42 ms | 6.13 ms | 15.25 ms | 15.70 ms | 50 → 50 |
+
+(D2 had 12 products; D11 has 20,012. With 20,012 products and no Redis the list took 4.11 ms p50, see D7.)

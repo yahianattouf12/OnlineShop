@@ -5,6 +5,9 @@ namespace Shop.Api.Modules.Orders;
 
 public static class OrdersModule
 {
+    /// <summary>The name of the second OrdersDbContext, the one that reads from the replica.</summary>
+    public const string ReadReplica = "orders-read-replica";
+
     public static IServiceCollection AddOrdersModule(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<OrdersDbContext>(options =>
@@ -17,6 +20,19 @@ public static class OrdersModule
                         "__EFMigrationsHistory",
                         "orders");
                 });
+        });
+
+        // Requirement 3: a second OrdersDbContext, registered under a name (a "keyed" service), that reads from
+        // the replica. Same model and settings as the normal one; only the connection string is different.
+        // Without the replica (no ConnectionStrings__OrdersReadReplica) it simply uses the primary, so nothing breaks.
+        var replica = configuration.GetConnectionString("OrdersReadReplica");
+        services.AddKeyedScoped<OrdersDbContext>(ReadReplica, (provider, _) =>
+        {
+            var primaryOptions = provider.GetRequiredService<DbContextOptions<OrdersDbContext>>();
+            var builder = new DbContextOptionsBuilder<OrdersDbContext>(primaryOptions);
+            if (!string.IsNullOrWhiteSpace(replica))
+                builder.UseNpgsql(replica);
+            return new OrdersDbContext(builder.Options);
         });
 
         services.AddHostedService<DatabaseMigrator<OrdersDbContext>>();
