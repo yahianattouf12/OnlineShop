@@ -126,3 +126,38 @@ Data: 20,012 products (`seed/r3-products.sql`). Same code with and without Redis
 | With the 30 s pause after a Redis error ("circuit breaker") | 1,391 ms | **8 to 14 ms** |
 
 After Redis is back and the 30 s pause ends, the app uses Redis again by itself.
+
+## D8. HTTP ETag: 304 Not Modified on `GET /products/{id}`
+
+The ETag is a SHA-256 of the answer's JSON (`W/"<hash>"`), sent with `Cache-Control: no-cache`
+("keep it, but ask me before you use it again"). A client that sends the same ETag in `If-None-Match`
+gets `304 Not Modified` with no body. The stock is part of the JSON, so a sale also gives a new ETag.
+
+```
+GET /products/{id}                              -> HTTP/1.1 200 OK, ETag: W/"1652F412...", Cache-Control: no-cache
+GET /products/{id}  If-None-Match: W/"1652F412..." -> HTTP/1.1 304 Not Modified
+```
+
+| `GET /products/{id}`, 1,500 requests | p50 | p95 | p99 | Data received |
+|---|---|---|---|---|
+| Always 200 (no ETag sent) | 3.66 ms | 7.28 ms | 13.41 ms | 1.1 MB |
+| With the ETag → 304 | 3.59 ms | 7.77 ms | 13.29 ms | **483 kB** |
+
+- Same time: the server still builds the answer to compute its hash. What we save is the network:
+  no body is sent (what is left is only the headers). Bigger answers save more. This matters for phones and
+  slow connections; Redis is what saves work on the database.
+
+## D9. Editing a product shows at once (despite Redis and the ETag)
+
+New `PUT /api/v1/products/{id}` (admin): saves, then deletes the product's details key in Redis and starts a
+new list generation. Proof (`node api-tests/r3/proof-edit.mjs`, Redis on):
+
+```
+1. before: price 129, ETag W/"1652F412E40...
+2. same ETag again -> 304 (nothing changed, no body)
+3. admin PUT new price 130 -> 200
+4. old ETag right after the edit -> 200, price 130
+5. product list right after the edit -> price 130
+
+PROOF OK: the edit shows at once, in the details and in the list.
+```

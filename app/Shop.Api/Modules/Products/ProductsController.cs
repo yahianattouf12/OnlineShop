@@ -1,5 +1,9 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 using Shop.Api.Common;
 using Shop.Api.Common.Auth;
 using Shop.Api.Common.Paging;
@@ -13,10 +17,13 @@ namespace Shop.Api.Modules.Products;
 public class ProductsController : ControllerBase
 {
     private readonly ProductsService _productsService;
+    private readonly JsonSerializerOptions _jsonOptions;
 
-    public ProductsController(ProductsService productsService)
+    public ProductsController(ProductsService productsService, IOptions<JsonOptions> jsonOptions)
     {
         _productsService = productsService;
+        // The same JSON settings MVC uses to write responses (camelCase), so we hash exactly what the client gets.
+        _jsonOptions = jsonOptions.Value.JsonSerializerOptions;
     }
 
     /// <summary>Adds a product with its image (admin only).</summary>
@@ -37,10 +44,42 @@ public class ProductsController : ControllerBase
     public Task<PagedResponse<ProductResponse>> List([FromQuery] ProductQuery query, CancellationToken ct) =>
         _productsService.ListAsync(query, ct);
 
-    /// <summary>One product, with how many units are in stock (asked from the inventory service).</summary>
+    /// <summary>
+    /// One product, with how many units are in stock (asked from the inventory service).
+    /// Requirement 3: answers 304 Not Modified (no body) when the client already has this exact version.
+    /// </summary>
     [HttpGet("{id:guid}")]
-    public Task<ProductResponse> GetById(Guid id, CancellationToken ct) =>
-        _productsService.GetByIdAsync(id, ct);
+    [ProducesResponseType<ProductResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status304NotModified)]
+    public async Task<ActionResult<ProductResponse>> GetById(Guid id, CancellationToken ct)
+    {
+        var product = await _productsService.GetByIdAsync(id, ct);
+
+        // 1. The ETag is a fingerprint of the exact answer: a hash of its JSON. Same data -> same ETag.
+        //    The stock is part of the JSON, so a sale or a stock change gives a new ETag.
+        var json = JsonSerializer.SerializeToUtf8Bytes(product, _jsonOptions);
+        var hash = Convert.ToHexString(SHA256.HashData(json));
+        var etag = new EntityTagHeaderValue($"\"{hash}\"", isWeak: true); // W/"..." = same meaning, maybe not same bytes
+
+        // 2. Send the ETag every time. "no-cache" does NOT mean "do not store": it means
+        //    "you may keep it, but ask me (with the ETag) before you use it again".
+        var headers = Response.GetTypedHeaders();
+        headers.ETag = etag;
+        headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+
+        // 3. The client sends the ETag it already has in If-None-Match. If it still matches: 304, no body.
+        var clientTags = Request.GetTypedHeaders().IfNoneMatch;
+        if (clientTags.Any(tag => tag.Equals(EntityTagHeaderValue.Any) || tag.Compare(etag, useStrongComparison: false)))
+            return StatusCode(StatusCodes.Status304NotModified);
+
+        return Ok(product);
+    }
+
+    /// <summary>Changes a product's name, description, price and category (admin only).</summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = Roles.Admin)]
+    public Task<ProductResponse> Update(Guid id, UpdateProductRequest request, CancellationToken ct) =>
+        _productsService.UpdateAsync(id, request, ct);
 
     /// <summary>Sets how many units of the product are in stock (admin only).</summary>
     [HttpPut("{id:guid}/stock")]
