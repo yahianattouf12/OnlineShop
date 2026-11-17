@@ -10,6 +10,8 @@
   "dependencies": {
     "@grpc/grpc-js": "^1.14.7",
     "@grpc/proto-loader": "^0.8.1",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.8"
   }
 }

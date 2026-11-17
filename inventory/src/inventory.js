@@ -1,13 +1,22 @@
 const grpc = require('@grpc/grpc-js');
-const { pool, inTransaction } = require('./db');
+const { fn } = require('sequelize');
+const { sequelize, Stock, Reservation, ReservationItem } = require('./db');
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_INT32 = 2_147_483_647;
 
 /** An error we throw on purpose. The client receives its gRPC status code and its message. */
 class RpcError extends Error {
   constructor(code, message) {
     super(message);
     this.code = code;
+  }
+}
+
+class StockShortageError extends Error {
+  constructor(shortages) {
+    super('Insufficient stock.');
+    this.shortages = shortages;
   }
 }
 
@@ -26,14 +35,10 @@ function byProductId(a, b) {
   return a.productId < b.productId ? -1 : a.productId > b.productId ? 1 : 0;
 }
 
-async function availableOf(db, productId) {
-  const { rows } = await db.query('SELECT quantity FROM stock WHERE product_id = $1', [productId]);
-  return rows.length ? rows[0].quantity : 0; // a product we never heard of has 0 in stock
-}
-
 async function getStock(request) {
   const productId = guid(request.product_id, 'product_id');
-  return { product_id: productId, available: await availableOf(pool, productId) };
+  const stock = await Stock.findByPk(productId, { attributes: ['quantity'] });
+  return { product_id: productId, available: stock?.quantity ?? 0 };
 }
 
 //! هي الفانكشنتين لسه لهلق ما فهمتهم بدهم شرح متعمق اكثر حتى افهم شو يلي عم يصير بالضبط
@@ -51,93 +56,90 @@ async function reserve(request) {
     if (item.quantity <= 0) {
       throw new RpcError(grpc.status.INVALID_ARGUMENT, 'quantity must be greater than 0.');
     }
-    quantities.set(productId, (quantities.get(productId) ?? 0) + item.quantity);
+    const total = (quantities.get(productId) ?? 0) + item.quantity;
+    if (total > MAX_INT32) {
+      throw new RpcError(grpc.status.INVALID_ARGUMENT, 'Total quantity for one product exceeds the maximum.');
+    }
+    quantities.set(productId, total);
   }
   const items = [...quantities].map(([productId, quantity]) => ({ productId, quantity })).sort(byProductId);
 
-  return inTransaction(async (db) => {
-    // Remember the order first. If it is already here, this is a repeated call (for example a retry).
-    const created = await db.query(
-      `INSERT INTO reservations (order_id, status) VALUES ($1, 'RESERVED')
-       ON CONFLICT (order_id) DO NOTHING`,
-      [orderId]);
+  try {
+    return await sequelize.transaction(async (transaction) => {
+      const [reservation, created] = await Reservation.findOrCreate({
+        where: { orderId },
+        defaults: { status: 'RESERVED' },
+        transaction,
+        lock: true,
+      });
 
-    if (created.rowCount === 0) {
-      const { rows } = await db.query('SELECT status FROM reservations WHERE order_id = $1', [orderId]);
-      if (rows[0].status === 'RESERVED') {
-        return { commit: true, result: { reserved: true, shortages: [] } }; // already reserved: do not take it twice
-      }
-      throw new RpcError(grpc.status.FAILED_PRECONDITION, `The reservation of order ${orderId} was already released.`);
-    }
-
-    const shortages = [];
-    for (const { productId, quantity } of items) {
-      // THE protection against the race condition: check and subtract in ONE statement.
-      // PostgreSQL locks the row, so when two orders want the last unit at the same moment,
-      // the second one waits, then sees quantity = 0, the WHERE does not match, and 0 rows change.
-      const taken = await db.query(
-        `UPDATE stock SET quantity = quantity - $2, updated_at = now()
-         WHERE product_id = $1 AND quantity >= $2`,
-        [productId, quantity]);
-
-      if (taken.rowCount === 0) {
-        shortages.push({ product_id: productId, requested: quantity, available: await availableOf(db, productId) });
-        continue;
+      if (!created) {
+        if (reservation.status === 'RESERVED') {
+          return { reserved: true, shortages: [] };
+        }
+        throw new RpcError(grpc.status.FAILED_PRECONDITION, `The reservation of order ${orderId} was already released.`);
       }
 
-      await db.query(
-        'INSERT INTO reservation_items (order_id, product_id, quantity) VALUES ($1, $2, $3)',
-        [orderId, productId, quantity]);
-    }
+      const shortages = [];
+      for (const { productId, quantity } of items) {
+        // Lock before reading the quantity so competing orders check stock one at a time.
+        const stock = await Stock.findByPk(productId, { transaction, lock: true });
+        const available = stock?.quantity ?? 0;
+        if (available < quantity) {
+          shortages.push({ product_id: productId, requested: quantity, available });
+          continue;
+        }
+        await stock.update({ quantity: available - quantity, updatedAt: fn('now') }, { transaction });
+      }
 
-    // All or nothing: if even one product is short, ROLLBACK gives back what the others took.
-    if (shortages.length > 0) {
-      console.log(`Reserve ${orderId}: rejected, not enough stock for ${shortages.length} product(s)`);
-      return { commit: false, result: { reserved: false, shortages } };
-    }
+      // Throw inside the transaction so Sequelize rolls back every deduction and the reservation row.
+      if (shortages.length > 0) throw new StockShortageError(shortages);
 
-    console.log(`Reserve ${orderId}: reserved ${items.length} product(s)`);
-    return { commit: true, result: { reserved: true, shortages: [] } };
-  });
+      await ReservationItem.bulkCreate(items.map((item) => ({ orderId, ...item })), { transaction });
+      console.log(`Reserve ${orderId}: reserved ${items.length} product(s)`);
+      return { reserved: true, shortages: [] };
+    });
+  } catch (error) {
+    if (!(error instanceof StockShortageError)) throw error;
+    console.log(`Reserve ${orderId}: rejected, not enough stock for ${error.shortages.length} product(s)`);
+    return { reserved: false, shortages: error.shortages };
+  }
 }
 
 async function release(request) {
   const orderId = guid(request.order_id, 'order_id');
 
-  return inTransaction(async (db) => {
+  return sequelize.transaction(async (transaction) => {
     // Nothing reserved under this order? Still write it down as RELEASED: if its Reserve call
     // arrives late (it was slow on the network), it is refused instead of taking the stock forever.
-    const marked = await db.query(
-      `INSERT INTO reservations (order_id, status, released_at) VALUES ($1, 'RELEASED', now())
-       ON CONFLICT (order_id) DO NOTHING`,
-      [orderId]);
-    if (marked.rowCount === 1) {
-      console.log(`Release ${orderId}: nothing was reserved`);
-      return { commit: true, result: { released: false } };
-    }
-
-    // FOR UPDATE: two Release calls for the same order at the same time cannot both give the stock back.
+    // lock: true uses SELECT FOR UPDATE to keep two Release calls from both giving the stock back.
     //! بدي حدا يشرحلي هي تبع Select For Update اجباري
-    const { rows } = await db.query('SELECT status FROM reservations WHERE order_id = $1 FOR UPDATE', [orderId]);
-    if (rows[0].status === 'RELEASED') {
-      return { commit: true, result: { released: false } }; // already given back
+    const [reservation, created] = await Reservation.findOrCreate({
+      where: { orderId },
+      defaults: { status: 'RELEASED', releasedAt: fn('now') },
+      transaction,
+      lock: true,
+    });
+    if (created) {
+      console.log(`Release ${orderId}: nothing was reserved`);
+      return { released: false };
+    }
+    if (reservation.status === 'RELEASED') {
+      return { released: false };
     }
 
-    const reserved = await db.query(
-      'SELECT product_id AS "productId", quantity FROM reservation_items WHERE order_id = $1',
-      [orderId]);
-    for (const { productId, quantity } of reserved.rows.sort(byProductId)) {
-      await db.query(
-        'UPDATE stock SET quantity = quantity + $2, updated_at = now() WHERE product_id = $1',
-        [productId, quantity]);
+    const items = await ReservationItem.findAll({ where: { orderId }, transaction });
+    for (const { productId, quantity } of items.sort(byProductId)) {
+      const stock = await Stock.findByPk(productId, { transaction, lock: true });
+      if (stock) {
+        await stock.update({ quantity: stock.quantity + quantity, updatedAt: fn('now') }, { transaction });
+      }
     }
 
-    await db.query(
-      `UPDATE reservations SET status = 'RELEASED', released_at = now() WHERE order_id = $1`,
-      [orderId]);
+    await reservation.update({ status: 'RELEASED', releasedAt: fn('now') }, { transaction });
 
-    console.log(`Release ${orderId}: gave back ${reserved.rowCount} product(s)`);
-    return { commit: true, result: { released: true } };
+    console.log(`Release ${orderId}: gave back ${items.length} product(s)`);
+    return { released: true };
   });
 }
 
@@ -147,14 +149,14 @@ async function setStock(request) {
     throw new RpcError(grpc.status.INVALID_ARGUMENT, 'quantity must be 0 or more.');
   }
 
-  const { rows } = await pool.query(
-    `INSERT INTO stock (product_id, quantity) VALUES ($1, $2)
-     ON CONFLICT (product_id) DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = now()
-     RETURNING quantity`,
-    [productId, request.quantity]);
+  const [stock] = await Stock.upsert({
+    productId,
+    quantity: request.quantity,
+    updatedAt: fn('now'),
+  }, { fields: ['quantity', 'updatedAt'] });
 
-  console.log(`SetStock ${productId}: ${rows[0].quantity}`);
-  return { product_id: productId, available: rows[0].quantity };
+  console.log(`SetStock ${productId}: ${stock.quantity}`);
+  return { product_id: productId, available: stock.quantity };
 }
 
 module.exports = { RpcError, getStock, reserve, release, setStock };
