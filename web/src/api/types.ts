@@ -31,6 +31,25 @@ export interface Product {
   category: string;
   imageUrl: string;
   createdAt: string;
+  /**
+   * Units in stock, asked from the inventory service over gRPC. Only GET /products/{id} fills it:
+   * a number there, or null when the inventory service is down or too slow. The list leaves it out.
+   */
+  stock?: number | null;
+}
+
+/** PUT /products/{id}/stock (admin). */
+export interface StockResponse {
+  productId: string;
+  stock: number;
+}
+
+/** One entry of "shortages" in the 409 Problem Details when an order asks for more than is in stock. */
+export interface StockShortage {
+  productId: string;
+  productName: string;
+  requested: number;
+  available: number;
 }
 
 export const ORDER_STATUSES = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'] as const;
@@ -61,6 +80,7 @@ export interface OrderSummary {
   status: OrderStatus;
   totalAmount: number;
   itemCount: number;
+  productIds: string[];
   createdAt: string;
 }
 

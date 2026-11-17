@@ -48,6 +48,9 @@ function NavItems() {
           <NavLink to="/admin/orders" className={linkClass}>
             Orders
           </NavLink>
+          <NavLink to="/admin/inventory" className={linkClass}>
+            Inventory
+          </NavLink>
           <NavLink to="/admin/products/new" className={linkClass}>
             Add product
           </NavLink>
@@ -59,6 +62,11 @@ function NavItems() {
       {user && (
         <NavLink to="/security" className={linkClass}>
           Security checks
+        </NavLink>
+      )}
+      {isAdmin && (
+        <NavLink to="/inventory-checks" className={linkClass}>
+          Inventory checks
         </NavLink>
       )}
     </nav>
@@ -148,7 +156,7 @@ function Footer() {
       <div className="footer-inner">
         <div className="stack gap-sm">
           <div className="footer-wordmark">OnlineShop.</div>
-          <p className="body-sm faint">Internet Applications course project · Requirement 1: API design and security.</p>
+          <p className="body-sm faint">Internet Applications course project · Requirement 1: API design and security · Requirement 2: an inventory service over gRPC.</p>
         </div>
         <div className="footer-links">
           <Link to="/products">Shop</Link>

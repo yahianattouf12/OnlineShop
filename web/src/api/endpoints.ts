@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { LoginResponse, Notification, Order, OrderStatus, OrderSummary, Paged, Product, User } from './types';
+import type { LoginResponse, Notification, Order, OrderStatus, OrderSummary, Paged, Product, StockResponse, User } from './types';
 
 const query = (params: Record<string, string | number | boolean | undefined | null>) => {
   const search = new URLSearchParams();
@@ -26,6 +26,7 @@ export const productsApi = {
     api<Paged<Product>>(`/products${query(params)}`, { signal, token: null }),
   get: (id: string) => api<Product>(`/products/${id}`, { token: null }),
   create: (form: FormData) => api<Product>('/products', { method: 'POST', form }),
+  setStock: (id: string, quantity: number) => api<StockResponse>(`/products/${id}/stock`, { method: 'PUT', body: { quantity } }),
 };
 
 export const ordersApi = {

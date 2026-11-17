@@ -13,6 +13,22 @@
   --color-text-faint: #adadad;
   --color-on-primary: #ffffff;
   --color-accent: #0066ff; /* commercial signals only, never CTAs */
+  --color-error: #d92d20; /* errors only: invalid field outlines, error icons */
+  --color-error-text: #b42318; /* error text, 6.5:1 on white and on --color-error-soft */
+  --color-error-soft: #fef3f2;
+  --color-error-hairline: #fecdca;
+
+  /* Order status: a strong text color on a translucent tint of the same hue (each 4.5:1 or better) */
+  --color-status-pending: #b54708;
+  --color-status-pending-bg: rgba(247, 144, 9, 0.14);
+  --color-status-confirmed: #175cd3;
+  --color-status-confirmed-bg: rgba(46, 144, 250, 0.14);
+  --color-status-shipped: #6941c6;
+  --color-status-shipped-bg: rgba(122, 90, 248, 0.14);
+  --color-status-delivered: #067647;
+  --color-status-delivered-bg: rgba(23, 178, 106, 0.14);
+  --color-status-cancelled: #b42318;
+  --color-status-cancelled-bg: rgba(240, 68, 56, 0.12);
   --color-overlay: rgba(115, 115, 115, 0.56);
 
   /* Type */

@@ -57,7 +57,7 @@ docker compose up --build
 docker compose --profile seed run --rm seed
 ```
 
-It is safe to run again (existing products are skipped). For a completely clean start: `docker compose down -v` (deletes all local data), `docker compose up -d`, then seed.
+It also sets each product's stock in the inventory service. It is safe to run again (existing products are skipped; one with 0 in stock is restocked). For a completely clean start: `docker compose down -v` (deletes all local data), `docker compose up -d`, then seed.
 
 
 ## Run it locally (for development)

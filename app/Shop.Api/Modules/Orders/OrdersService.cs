@@ -119,7 +119,14 @@ public class OrdersService
             .ThenBy(o => o.Id)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
-            .Select(o => new OrderSummaryResponse(o.Id, o.UserId, o.Status, o.TotalAmount, o.Items.Count, o.CreatedAt))
+            .Select(o => new OrderSummaryResponse(
+                o.Id,
+                o.UserId,
+                o.Status,
+                o.TotalAmount,
+                o.Items.Count,
+                o.Items.OrderBy(i => i.ProductName).Select(i => i.ProductId).ToList(),
+                o.CreatedAt))
             .ToListAsync(ct);
 
         return PagedResponse<OrderSummaryResponse>.Create(items, query.Page, query.PageSize, totalCount);

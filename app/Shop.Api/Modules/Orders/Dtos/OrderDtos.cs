@@ -66,5 +66,12 @@ public record OrderResponse(
     IReadOnlyList<OrderItemResponse> Items,
     IReadOnlyList<OrderStatusChangeResponse> StatusHistory);
 
-/// <summary>A short version for lists.</summary>
-public record OrderSummaryResponse(Guid Id, Guid UserId, OrderStatus Status, decimal TotalAmount, int ItemCount, DateTime CreatedAt);
+/// <summary>A short version for lists. ProductIds lets a list show each product's image (at most 20 per order).</summary>
+public record OrderSummaryResponse(
+    Guid Id,
+    Guid UserId,
+    OrderStatus Status,
+    decimal TotalAmount,
+    int ItemCount,
+    IReadOnlyList<Guid> ProductIds,
+    DateTime CreatedAt);

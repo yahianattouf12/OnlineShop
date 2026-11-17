@@ -2,9 +2,10 @@ import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAuth } from './auth/RequireAuth';
 import { Layout } from './components/Layout';
 import { EmptyState } from './components/ui';
-import { AddProductPage, UsersPage } from './pages/AdminPages';
+import { AddProductPage, InventoryPage, UsersPage } from './pages/AdminPages';
 import { LoginPage, RegisterPage } from './pages/AuthPages';
 import { CartPage } from './pages/CartPage';
+import { InventoryChecksPage } from './pages/InventoryChecksPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { OrderDetailPage } from './pages/OrderDetailPage';
 import { OrdersPage } from './pages/OrdersPage';
@@ -46,6 +47,9 @@ export function App() {
         <Route path="security" element={<RequireAuth><SecurityPage /></RequireAuth>} />
 
         <Route path="admin/orders" element={<RequireAuth role="Admin"><OrdersPage admin /></RequireAuth>} />
+        <Route path="admin/inventory" element={<RequireAuth role="Admin"><InventoryPage /></RequireAuth>} />
+        {/* Admin only: it sets the stock, and places the orders through a temporary customer it creates. */}
+        <Route path="inventory-checks" element={<RequireAuth role="Admin"><InventoryChecksPage /></RequireAuth>} />
         <Route path="admin/products/new" element={<RequireAuth role="Admin"><AddProductPage /></RequireAuth>} />
         <Route path="admin/users" element={<RequireAuth role="Admin"><UsersPage /></RequireAuth>} />
 

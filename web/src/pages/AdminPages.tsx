@@ -1,11 +1,23 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { productsApi, usersApi } from '../api/endpoints';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toasts';
-import { EmptyState, PageHeader, ProblemNotice, TextAreaField, TextField } from '../components/ui';
-import { capitalize, formatDate, shortId } from '../lib/format';
+import {
+  EmptyState,
+  Notice,
+  PageHeader,
+  Pagination,
+  ProblemNotice,
+  Spinner,
+  StockBadge,
+  StockEditor,
+  TextAreaField,
+  TextField,
+} from '../components/ui';
+import { capitalize, formatDate, formatMoney, shortId } from '../lib/format';
+import { loadStocks } from '../lib/stock';
 import { useAsync } from '../lib/useAsync';
 
 // Same limits as the API (ImageFileAttribute). The server re-checks everything, including the file's real bytes.
@@ -19,6 +31,7 @@ export function AddProductPage() {
   const [category, setCategory] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
+  const [stock, setStock] = useState('');
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>();
   const [imageError, setImageError] = useState<string[]>();
@@ -64,7 +77,19 @@ export function AddProductPage() {
     if (image) form.set('image', image);
     try {
       const product = await productsApi.create(form);
-      toast(`${product.name} is now in the shop.`);
+      // The stock is not part of the product: it lives in the inventory service, so it is a second call.
+      // If that one fails (e.g. the inventory service is down), the product still exists; say so clearly.
+      const units = Number(stock);
+      if (stock.trim() && units > 0) {
+        try {
+          await productsApi.setStock(product.id, units);
+          toast(`${product.name} is now in the shop, with ${units} in stock.`);
+        } catch {
+          toast(`${product.name} was added, but its stock could not be set. Set it on the product page.`);
+        }
+      } else {
+        toast(`${product.name} is now in the shop. Set its stock so customers can order it.`);
+      }
       navigate(`/products/${product.id}`);
     } catch (err) {
       setError(err);
@@ -76,6 +101,11 @@ export function AddProductPage() {
   const apiError = error instanceof ApiError && error.status === 422 ? error : undefined;
   const errorsFor = (field: string) => apiError?.fieldErrors(field);
   const imageErrors = imageError ?? errorsFor('Image');
+  const stockUnits = Number(stock);
+  const stockError =
+    stock.trim() && !(Number.isInteger(stockUnits) && stockUnits >= 0 && stockUnits <= 1_000_000)
+      ? ['A whole number from 0 to 1,000,000.']
+      : undefined;
 
   return (
     <main className="main main-medium">
@@ -167,6 +197,18 @@ export function AddProductPage() {
               error={errorsFor('Price')}
               placeholder="199.99"
             />
+            <TextField
+              label="Units in stock"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="1"
+              value={stock}
+              onChange={(e) => setStock(e.target.value)}
+              error={stockError}
+              placeholder="0"
+              hint="Optional. Sent to the inventory service after the product is created."
+            />
           </div>
 
           <TextAreaField
@@ -185,11 +227,113 @@ export function AddProductPage() {
           <button type="button" className="btn btn-outline" onClick={() => navigate('/products')}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy || stockError != null}>
             {busy ? 'Adding…' : 'Add product'}
           </button>
         </div>
       </form>
+    </main>
+  );
+}
+
+/**
+ * Inventory management (Requirement 2). The stock is not in this app's database: every number here is asked
+ * from the inventory service over gRPC (GetStock), and every save is sent to it (SetStock).
+ */
+export function InventoryPage() {
+  const [page, setPage] = useState(1);
+  const products = useAsync(() => productsApi.list({ page, pageSize: 12 }), [page]);
+  const ids = (products.data?.items ?? []).map((p) => p.id).join(',');
+  const stocks = useAsync(() => loadStocks(ids ? ids.split(',') : []), [ids]);
+  const toast = useToast();
+
+  const items = products.data?.items ?? [];
+  const stocksReady = !stocks.loading && stocks.data != null;
+  const inventoryDown = stocksReady && items.length > 0 && items.every((p) => stocks.data![p.id] === null);
+
+  return (
+    <main className="main">
+      <PageHeader
+        title="Inventory."
+        lead="Stock lives in the inventory service, with its own database. This page asks it, and sends it your changes."
+        actions={
+          <>
+            <button type="button" className="btn btn-soft" onClick={stocks.reload} disabled={stocks.loading}>
+              Refresh stock
+            </button>
+            <Link to="/admin/products/new" className="btn btn-primary">
+              <Icon name="plus" size={16} />
+              Add product
+            </Link>
+          </>
+        }
+      />
+
+      {inventoryDown && (
+        <div style={{ marginBottom: 'var(--space-lg)' }}>
+          <Notice tone="error" icon="alert" title="The inventory service isn’t answering.">
+            The stock can’t be read or changed until it’s back. The shop still works, without stock. To bring it back:{' '}
+            <span className="mono">docker compose start inventory</span>
+          </Notice>
+        </div>
+      )}
+
+      {products.error ? (
+        <ProblemNotice error={products.error} />
+      ) : !products.data ? (
+        <div className="skeleton" style={{ height: 320 }} />
+      ) : items.length === 0 ? (
+        <EmptyState icon="box" title="No products yet." action={<Link to="/admin/products/new" className="btn btn-primary">Add a product</Link>}>
+          Add products first, then set their stock here.
+        </EmptyState>
+      ) : (
+        <>
+          <div className="card table-wrap" style={{ padding: 'var(--space-md) var(--space-sm) var(--space-xs)' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th className="num">Price</th>
+                  <th>Stock</th>
+                  <th>Set stock</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((p) => {
+                  const stock = stocks.data?.[p.id];
+                  return (
+                    <tr key={p.id}>
+                      <td>
+                        <Link to={`/products/${p.id}`} className="row gap-sm strong" style={{ textDecoration: 'none', color: 'inherit' }}>
+                          <img className="thumb" src={p.imageUrl} alt="" />
+                          {p.name}
+                        </Link>
+                      </td>
+                      <td className="muted">{capitalize(p.category)}</td>
+                      <td className="num">{formatMoney(p.price)}</td>
+                      <td>{stocksReady ? <StockBadge stock={stock} /> : <Spinner label="Asking" />}</td>
+                      <td style={{ minWidth: 220 }}>
+                        <StockEditor
+                          compact
+                          productId={p.id}
+                          productName={p.name}
+                          stock={stocksReady ? stock : undefined}
+                          onSaved={(saved) => {
+                            stocks.setData({ ...stocks.data, [p.id]: saved });
+                            toast(`${p.name}: ${saved} in stock.`);
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} totalPages={products.data.totalPages} onChange={setPage} />
+        </>
+      )}
     </main>
   );
 }
