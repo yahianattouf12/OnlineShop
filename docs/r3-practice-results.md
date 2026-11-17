@@ -97,3 +97,32 @@ purpose for a few minutes (1 query for the page + 1 query per order for its item
 - The N+1 version makes 2 + N queries and is about 3 times slower, although every single query is fast:
   each query is a round trip to the database, and the round trips add up.
 - D3 also found an N+1 hidden inside ONE SQL query (the item count ran 100,000 times); D4 fixed it.
+
+## D7. Redis: cache-aside for the product list and the product details
+
+`ProductsService`: look in Redis first; on a miss read the database and keep a copy for 60 s (TTL).
+On create/edit: delete the product's details key and start a new list "generation" (all old list keys are
+never read again). The stock is never cached. Turn Redis on with `docker-compose.cache.yml`.
+Data: 20,012 products (`seed/r3-products.sql`). Same code with and without Redis.
+
+| Endpoint | p50 no Redis | p50 Redis | p95 no Redis | p95 Redis | p99 no Redis | p99 Redis |
+|---|---|---|---|---|---|---|
+| `GET /products?page=1&pageSize=12` | 4.11 ms | **2.54 ms** | 6.98 ms | 5.62 ms | 16.32 ms | 10.47 ms |
+| `GET /products?category=bulk-3&page=50&pageSize=12` | 3.86 ms | **2.49 ms** | 8.57 ms | 8.49 ms | 15.26 ms | 10.14 ms |
+| `GET /products/{id}` | 3.96 ms | 3.78 ms | 7.91 ms | 6.53 ms | 14.80 ms | 12.61 ms |
+
+- The lists are about 1.6 times faster: a hit skips both SQL queries (the `count(*)` and the page).
+- The product details barely change: the slow part is the gRPC call for the stock, and the stock must not be cached.
+- Inside Redis: `shop:products:list:generation`, `shop:products:list:<generation>:all:1:12`, `shop:products:details:<id>`,
+  `TTL` counting down from 60. After the tests: **15,000 hits, 11 misses** (15,000 reads that did not touch PostgreSQL).
+- Our database is small and on the same PC, so it is already fast; with a real network between app and
+  database, every skipped query would save more.
+
+**Redis down** (`docker compose stop redis`): the shop keeps working from the database.
+
+| | Request 1 | Requests 2 to 5 |
+|---|---|---|
+| First version: every read waits for the Redis timeouts | 3,887 ms | about 3,000 ms each |
+| With the 30 s pause after a Redis error ("circuit breaker") | 1,391 ms | **8 to 14 ms** |
+
+After Redis is back and the 30 s pause ends, the app uses Redis again by itself.

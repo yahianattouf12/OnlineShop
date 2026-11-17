@@ -1,0 +1,21 @@
+# Requirement 3: Redis for the product cache. Turn it on by adding this file:
+#   docker compose -f docker-compose.yml -f docker-compose.cache.yml up -d --build
+# Without it the app simply reads the database (the "before" measurement).
+services:
+  app:
+    environment:
+      # abortConnect=false: the app starts even if Redis is down. Short timeouts: a slow Redis must not make the shop slow.
+      Redis__Configuration: redis:6379,abortConnect=false,connectTimeout=1000,syncTimeout=1000,asyncTimeout=1000
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7.4-alpine
+    # A cache only: nothing is saved to disk. If Redis restarts, it starts empty and fills again.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10

@@ -56,3 +56,19 @@ public class SetStockRequest
 }
 
 public record StockResponse(Guid ProductId, int Stock);
+
+/// <summary>PUT /products/{id} (admin): the new name, description, price and category. The image does not change.</summary>
+public class UpdateProductRequest
+{
+    [Required, MaxLength(200)]
+    public string Name { get; set; } = "";
+
+    [MaxLength(2000)]
+    public string Description { get; set; } = "";
+
+    [Range(0.01, 1_000_000)]
+    public decimal Price { get; set; }
+
+    [Required, MaxLength(50)]
+    public string Category { get; set; } = "";
+}
