@@ -59,6 +59,9 @@ namespace Shop.Api.Modules.Orders.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("CreatedAt", "Id")
+                        .IsDescending(true, false);
+
                     b.ToTable("Orders", "orders");
                 });
 
