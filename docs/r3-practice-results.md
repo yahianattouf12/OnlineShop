@@ -81,3 +81,19 @@ Same answer as `GET /orders` (same 10 orders, same total), only the query is dif
   One slow query can take the whole shop down. (After this test: `docker compose restart app`.)
 - The old query is faster here than in D2 (it also uses the new index, so it has no sort any more),
   but it still counts the items of 100,000 orders per request.
+
+## D6. N+1: measured on purpose (not committed)
+
+The order list is ONE query with a projection (`Select`), plus the total count. To prove there is no N+1,
+we count the SQL queries of one request (`Executed DbCommand` in the app log), then write the N+1 version on
+purpose for a few minutes (1 query for the page + 1 query per order for its items) and measure it.
+
+| Version (`GET /orders?page=1`, admin) | SQL queries, pageSize 10 | SQL queries, pageSize 50 | p50 (pageSize 50) | p95 | p99 |
+|---|---|---|---|---|---|
+| Projection (our code) | **2** | **2** | **11.65 ms** | 14.25 ms | 19.79 ms |
+| N+1 (on purpose) | 12 | **52** | 33.18 ms | 42.03 ms | 60.62 ms |
+
+- With the projection the number of queries does not grow with the page size: no N+1.
+- The N+1 version makes 2 + N queries and is about 3 times slower, although every single query is fast:
+  each query is a round trip to the database, and the round trips add up.
+- D3 also found an N+1 hidden inside ONE SQL query (the item count ran 100,000 times); D4 fixed it.
