@@ -113,24 +113,7 @@ public class OrdersService
         if (query.Status is { } status)
             orders = orders.Where(o => o.Status == status);
 
-        /* this is the old version.. and it has N+1 problem inside its sql command
-            var totalCount = await orders.CountAsync(ct);
-            var items = await orders
-                .OrderByDescending(o => o.CreatedAt)
-                .ThenBy(o => o.Id)
-                .Skip((query.Page - 1) * query.PageSize)
-                .Take(query.PageSize)
-                .Select(o => new OrderSummaryResponse(
-                    o.Id,
-                    o.UserId,
-                    o.Status,
-                    o.TotalAmount,
-                    o.Items.Count,
-                    o.Items.OrderBy(i => i.ProductName).Select(i => i.ProductId).ToList(),
-                    o.CreatedAt))
-                .ToListAsync(ct); 
-        */
-
+        // The old version (before Requirement 3) is kept in ListLegacyAsync below, to compare the two with k6.
         var totalCount = await orders.CountAsync(ct);
 
         // Requirement 3: FIRST pick the 10 orders of the page, THEN count their items.
@@ -161,6 +144,38 @@ public class OrdersService
             Invoke-RestMethod "http://localhost:8080/api/v1/orders?page=10000&pageSize=10" -Headers @{ Authorization = "Bearer $admin" } | Out-Null
             docker compose logs app --since 20s | Select-String -Context 0,16 "Executed DbCommand"
         */
+    }
+
+    /// <summary>
+    /// Requirement 3 demo: the order list EXACTLY as it was before the fix, so "before" and "after" can be
+    /// measured side by side with k6 (GET /orders/legacy vs GET /orders). Do not use it anywhere else.
+    /// The problem: Select comes before Skip/Take, so EF puts the item count INSIDE the LIMIT/OFFSET query,
+    /// and PostgreSQL counts the items of every skipped order too (100,000 counts for page 10,000).
+    /// </summary>
+    public async Task<PagedResponse<OrderSummaryResponse>> ListLegacyAsync(OrderQuery query, CancellationToken ct)
+    {
+        var orders = VisibleOrders();
+
+        if (query.Status is { } status)
+            orders = orders.Where(o => o.Status == status);
+
+        var totalCount = await orders.CountAsync(ct);
+        var items = await orders
+            .OrderByDescending(o => o.CreatedAt)
+            .ThenBy(o => o.Id)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .Select(o => new OrderSummaryResponse(
+                o.Id,
+                o.UserId,
+                o.Status,
+                o.TotalAmount,
+                o.Items.Count,
+                o.Items.OrderBy(i => i.ProductName).Select(i => i.ProductId).ToList(),
+                o.CreatedAt))
+            .ToListAsync(ct);
+
+        return PagedResponse<OrderSummaryResponse>.Create(items, query.Page, query.PageSize, totalCount);
     }
 
     public async Task<OrderResponse> GetByIdAsync(Guid id, CancellationToken ct)

@@ -34,6 +34,21 @@ public class OrdersController : ControllerBase
     public Task<PagedResponse<OrderSummaryResponse>> List([FromQuery] OrderQuery query, CancellationToken ct) =>
         _ordersService.ListAsync(query, ct);
 
+    /// <summary>
+    /// Requirement 3 demo (admin only, Development only): the order list with the OLD slow query,
+    /// to compare it with GET /orders in k6. In Production it does not exist (404).
+    /// </summary>
+    [HttpGet("legacy")]
+    [Authorize(Roles = Roles.Admin)]
+    public async Task<IActionResult> ListLegacy(
+        [FromQuery] OrderQuery query, [FromServices] IHostEnvironment env, CancellationToken ct)
+    {
+        if (!env.IsDevelopment())
+            return NotFound();
+
+        return Ok(await _ordersService.ListLegacyAsync(query, ct));
+    }
+
     /// <summary>One order with its items and status history. Another customer's order returns 404.</summary>
     [HttpGet("{id:guid}")]
     public Task<OrderResponse> GetById(Guid id, CancellationToken ct) =>
