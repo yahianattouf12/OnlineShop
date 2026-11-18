@@ -23,6 +23,14 @@ export interface LoginResponse {
   role: Role;
 }
 
+/** What PUT /products/{id} changes (admin). */
+export interface ProductDetails {
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+}
+
 export interface Product {
   id: string;
   name: string;

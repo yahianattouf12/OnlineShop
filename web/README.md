@@ -24,7 +24,7 @@ npm run dev        # http://localhost:5173, /api is forwarded to http://localhos
 | Who | Page | Route |
 |---|---|---|
 | Everyone | Shop: products, category filter, pagination | `/products` |
-| Everyone | Product details, with the stock from the inventory service (or "availability unknown" when it is down) | `/products/:id` |
+| Everyone | Product details, with the stock from the inventory service (or "availability unknown" when it is down). The admin edits the name, description, price and category here, and sets the stock | `/products/:id` |
 | Everyone | Log in · Sign up | `/login` · `/register` |
 | Customer | Cart and checkout (cart kept in the browser): a stock warning per line, and a clear message when the order is refused for stock (409) or the inventory service is down (503) | `/cart` |
 | Customer | My orders (status filter, pagination) | `/orders` |
@@ -35,6 +35,7 @@ npm run dev        # http://localhost:5173, /api is forwarded to http://localhos
 | Admin | Inventory: every product's stock, read from and saved to the inventory service | `/admin/inventory` |
 | Admin | Add a product with its image and its starting stock | `/admin/products/new` |
 | Admin | Inventory checks: runs the Requirement 2 proofs live (not enough stock, all or nothing, the race on the last unit, the inventory service stopped or slow) | `/inventory-checks` |
+| Admin | Performance checks: runs the Requirement 3 proofs live (ETag → 304, an edit shows at once despite Redis and the ETag, the deep order page with the old and the new query) and explains the replica, Redis-down and N+1 checks | `/performance-checks` |
 | Admin | Users | `/admin/users` |
 
 Errors from the API are always Problem Details, so the site shows them the same way everywhere:

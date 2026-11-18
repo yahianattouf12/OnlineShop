@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { useId, useState, type FormEvent, type InputHTMLAttributes, type ReactNode, type SyntheticEvent, type TextareaHTMLAttributes } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { productsApi } from '../api/endpoints';
@@ -99,6 +99,16 @@ export function TextAreaField({
       />
     </FieldShell>
   );
+}
+
+/* ---------- Images ---------- */
+
+/** An empty, transparent image: the thumbnail keeps its soft background instead of a broken-image icon. */
+const EMPTY_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
+/** For product images loaded by id: the product may have been deleted, or be test data without an image. */
+export function hideBrokenImage(event: SyntheticEvent<HTMLImageElement>) {
+  if (event.currentTarget.src !== EMPTY_IMAGE) event.currentTarget.src = EMPTY_IMAGE;
 }
 
 /* ---------- Status ---------- */
