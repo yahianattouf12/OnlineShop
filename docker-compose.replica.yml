@@ -1,0 +1,36 @@
+# Requirement 3: a read replica of app-db. Turn it on by adding this file:
+#   docker compose -f docker-compose.yml -f docker-compose.replica.yml up -d --build
+services:
+  app:
+    environment:
+      # The app writes to app-db (ConnectionStrings__Default) and reads the admin order list from here.
+      ConnectionStrings__OrdersReadReplica: Host=app-db-replica;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable
+    depends_on:
+      app-db-replica:
+        condition: service_healthy
+
+  app-db:
+    # Our own pg_hba.conf: it also lets the replica connect for replication.
+    command: ["postgres", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
+    volumes:
+      - ./deploy/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+
+  app-db-replica:
+    image: postgres:17
+    entrypoint: ["/bin/sh", "/start-replica.sh"]
+    environment:
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+    volumes:
+      - app-db-replica-data:/var/lib/postgresql/data
+      - ./deploy/postgres/start-replica.sh:/start-replica.sh:ro
+    depends_on:
+      app-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d db_online_shop"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+volumes:
+  app-db-replica-data:

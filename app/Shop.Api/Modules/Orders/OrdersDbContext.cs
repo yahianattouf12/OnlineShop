@@ -26,6 +26,11 @@ public class OrdersDbContext : DbContext
             entity.HasIndex(o => o.UserId); // "my orders" is the most common query
             entity.HasIndex(o => o.CreatedAt);
 
+            // Requirement 3: the exact order of the order list (CreatedAt DESC, then Id). PostgreSQL reads the
+            // index already sorted, so it does not have to sort orders with the same CreatedAt itself.
+            entity.HasIndex(o => new { o.CreatedAt, o.Id })
+                .IsDescending(true, false);
+
             // Foreign keys inside the module are fine.
             entity.HasMany(o => o.Items).WithOne().HasForeignKey(i => i.OrderId).OnDelete(DeleteBehavior.Cascade);
             entity.HasMany(o => o.StatusHistory).WithOne().HasForeignKey(h => h.OrderId).OnDelete(DeleteBehavior.Cascade);

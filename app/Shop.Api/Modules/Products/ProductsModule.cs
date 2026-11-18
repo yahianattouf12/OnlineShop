@@ -24,7 +24,20 @@ public static class ProductsModule
 
         services.AddHostedService<DatabaseMigrator<ProductsDbContext>>();
         services.AddScoped<ProductsService>();
-        
+
+        // Requirement 3: Redis, only when it is configured (docker-compose.cache.yml sets Redis__Configuration).
+        // Without it, IDistributedCache is not registered, ProductsService gets null and reads the database:
+        // that is our "before" measurement.
+        var redis = configuration["Redis:Configuration"];
+        if (!string.IsNullOrWhiteSpace(redis))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redis;
+                options.InstanceName = "shop:"; // a prefix for all our keys, e.g. shop:products:details:<id>
+            });
+        }
+
         // The only thing other modules may use from this module.
         services.AddScoped<IProductCatalog, ProductCatalog>();
 

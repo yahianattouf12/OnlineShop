@@ -12,6 +12,7 @@ namespace Shop.Api.Modules.Orders;
 public class OrdersService
 {
     private readonly OrdersDbContext _db;
+    private readonly OrdersDbContext _replicaDb; // read-only copy, only for the admin order list
     private readonly IProductCatalog _productCatalog; // the Products module's public door, NOT ProductsDbContext
     private readonly IInventoryService _inventory; // the inventory service, over gRPC
 
@@ -21,6 +22,7 @@ public class OrdersService
 
     public OrdersService(
         OrdersDbContext db,
+        [FromKeyedServices(OrdersModule.ReadReplica)] OrdersDbContext replicaDb,
         IProductCatalog productCatalog,
         INotificationService notifications,
         IInventoryService inventory,
@@ -28,6 +30,7 @@ public class OrdersService
         ILogger<OrdersService> logger)
     {
         _db = db;
+        _replicaDb = replicaDb;
         _productCatalog = productCatalog;
         _notifications = notifications;
         _inventory = inventory;
@@ -107,6 +110,57 @@ public class OrdersService
     }
 
     public async Task<PagedResponse<OrderSummaryResponse>> ListAsync(OrderQuery query, CancellationToken ct)
+    {
+        // Requirement 3: the admin's list of ALL orders is read from the replica (a heavy read that is fine
+        // a moment late). A customer's own list stays on the primary: the replica can lag a little, and a
+        // customer must see the order they have just placed (read-your-own-writes).
+        var orders = _currentUser.IsAdmin
+            ? _replicaDb.Orders.AsNoTracking()
+            : VisibleOrders();
+
+        if (query.Status is { } status)
+            orders = orders.Where(o => o.Status == status);
+
+        // The old version (before Requirement 3) is kept in ListLegacyAsync below, to compare the two with k6.
+        var totalCount = await orders.CountAsync(ct);
+
+        // Requirement 3: FIRST pick the 10 orders of the page, THEN count their items.
+        // Before, PostgreSQL counted the items of every skipped order too (100,000 counts for page 10,000).
+        var page = orders
+            .OrderByDescending(o => o.CreatedAt)
+            .ThenBy(o => o.Id)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize);
+
+        var items = await page
+            .OrderByDescending(o => o.CreatedAt) // the page keeps its order in the outer query too
+            .ThenBy(o => o.Id)
+            .Select(o => new OrderSummaryResponse(
+                o.Id,
+                o.UserId,
+                o.Status,
+                o.TotalAmount,
+                o.Items.Count,
+                o.Items.OrderBy(i => i.ProductName).Select(i => i.ProductId).ToList(),
+                o.CreatedAt))
+            .ToListAsync(ct);
+
+        return PagedResponse<OrderSummaryResponse>.Create(items, query.Page, query.PageSize, totalCount);
+        /** TO CHECK THE QUERY PLAN
+
+            docker compose up -d --build app
+            Invoke-RestMethod "http://localhost:8080/api/v1/orders?page=10000&pageSize=10" -Headers @{ Authorization = "Bearer $admin" } | Out-Null
+            docker compose logs app --since 20s | Select-String -Context 0,16 "Executed DbCommand"
+        */
+    }
+
+    /// <summary>
+    /// Requirement 3 demo: the order list EXACTLY as it was before the fix, so "before" and "after" can be
+    /// measured side by side with k6 (GET /orders/legacy vs GET /orders). Do not use it anywhere else.
+    /// The problem: Select comes before Skip/Take, so EF puts the item count INSIDE the LIMIT/OFFSET query,
+    /// and PostgreSQL counts the items of every skipped order too (100,000 counts for page 10,000).
+    /// </summary>
+    public async Task<PagedResponse<OrderSummaryResponse>> ListLegacyAsync(OrderQuery query, CancellationToken ct)
     {
         var orders = VisibleOrders();
 
