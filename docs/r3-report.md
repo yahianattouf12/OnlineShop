@@ -64,6 +64,8 @@ The N+1 version written on purpose (1 query per order) made **52 queries** for 5
 - Cached: the product list pages and the product details, 60 s TTL. Not cached: the stock (it must be exact),
   personal data (orders, notifications), anything about login.
 - On create/edit: delete the details key and start a new list "generation" (no slow key scans).
+- Every product response says how it was answered: `X-Cache: HIT` (Redis), `MISS` (database, now cached) or
+  `BYPASS` (Redis off or paused). The website's Performance checks show it on every request.
 - Lists about 1.6 times faster (4.11 → 2.54 ms p50); product details barely change, because their slow part
   is the gRPC stock call, which is never cached. After the tests: 15,000 hits, 11 misses.
 - Redis down: the shop keeps working from the database. At first every request waited for the Redis

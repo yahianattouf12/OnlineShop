@@ -1436,3 +1436,45 @@ p {
     display: inline;
   }
 }
+
+/* Performance checks: cold (database) vs warm (Redis), one bar each, length = p50 time */
+.cold-warm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+}
+
+.cold-warm-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) 1fr 72px;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.cold-warm-track {
+  height: 12px;
+}
+
+.cold-warm-bar {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0; /* square at the baseline, rounded at the value end */
+  background: var(--color-ink);
+}
+
+.cold-warm-value {
+  text-align: right;
+}
+
+@media (max-width: 719px) {
+  .cold-warm-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .cold-warm-row > :first-child {
+    grid-column: 1 / -1;
+  }
+}

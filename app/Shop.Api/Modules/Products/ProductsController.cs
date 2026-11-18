@@ -41,8 +41,12 @@ public class ProductsController : ControllerBase
 
     /// <summary>Lists products, newest first, with an optional category filter and paging.</summary>
     [HttpGet]
-    public Task<PagedResponse<ProductResponse>> List([FromQuery] ProductQuery query, CancellationToken ct) =>
-        _productsService.ListAsync(query, ct);
+    public async Task<PagedResponse<ProductResponse>> List([FromQuery] ProductQuery query, CancellationToken ct)
+    {
+        var page = await _productsService.ListAsync(query, ct);
+        AddCacheHeader();
+        return page;
+    }
 
     /// <summary>
     /// One product, with how many units are in stock (asked from the inventory service).
@@ -54,6 +58,7 @@ public class ProductsController : ControllerBase
     public async Task<ActionResult<ProductResponse>> GetById(Guid id, CancellationToken ct)
     {
         var product = await _productsService.GetByIdAsync(id, ct);
+        AddCacheHeader(); // about the name, price...; the stock in the answer is always read live
 
         // 1. The ETag is a fingerprint of the exact answer: a hash of its JSON. Same data -> same ETag.
         //    The stock is part of the JSON, so a sale or a stock change gives a new ETag.
@@ -73,6 +78,13 @@ public class ProductsController : ControllerBase
             return StatusCode(StatusCodes.Status304NotModified);
 
         return Ok(product);
+    }
+
+    /// <summary>X-Cache: HIT (Redis), MISS (database, now cached) or BYPASS (Redis off or paused).</summary>
+    private void AddCacheHeader()
+    {
+        if (_productsService.LastCacheStatus is { } status)
+            Response.Headers["X-Cache"] = status;
     }
 
     /// <summary>Changes a product's name, description, price and category (admin only).</summary>

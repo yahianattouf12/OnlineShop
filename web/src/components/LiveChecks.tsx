@@ -20,6 +20,8 @@ export interface Outcome {
   steps: Step[];
   /** The one response worth reading in full (e.g. the 409 refusal). */
   body?: unknown;
+  /** A small picture of the result (e.g. cold vs warm times), shown under the summary. */
+  visual?: ReactNode;
 }
 
 export type Body = Record<string, unknown> | null;
@@ -29,7 +31,9 @@ type Options = Parameters<typeof exchange>[1];
 export async function timed(log: Step[], label: string, path: string, options?: Options) {
   const started = performance.now();
   const ex = await exchange(path, options);
-  log.push({ label, ex, ms: performance.now() - started });
+  // Requirement 3: product reads say whether Redis answered (X-Cache: HIT, MISS or BYPASS).
+  const cache = ex.headers['x-cache'];
+  log.push({ label: cache ? `${label} · ${cache}` : label, ex, ms: performance.now() - started });
   return { ...ex, body: (ex.body && typeof ex.body === 'object' ? ex.body : null) as Body };
 }
 
@@ -56,7 +60,7 @@ export function ResultView({ result }: { result: Result }) {
       </div>
     );
   }
-  const { pass, summary, steps, body } = result.outcome!;
+  const { pass, summary, steps, body, visual } = result.outcome!;
   return (
     <div className="check-result">
       <div className="row gap-sm wrap">
@@ -66,6 +70,7 @@ export function ResultView({ result }: { result: Result }) {
         </span>
         <span className="body-sm">{summary}</span>
       </div>
+      {visual}
       <ol className="list stack gap-xxs body-sm">
         {steps.map((s, i) => (
           <li key={i} className="row gap-xs wrap">

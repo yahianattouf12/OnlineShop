@@ -33,6 +33,13 @@ public class ProductsService
     private readonly ILogger<ProductsService> _logger;
     private readonly IDistributedCache? _cache; // Redis, or null when Redis is not configured
 
+    /// <summary>
+    /// How the last cached read was answered: "HIT" (from Redis), "MISS" (from the database, now cached) or
+    /// "BYPASS" (Redis is off or paused). The controller sends it as the X-Cache header, so the effect of the
+    /// cache can be seen on every response (Requirement 3).
+    /// </summary>
+    public string? LastCacheStatus { get; private set; }
+
     public ProductsService(
         ProductsDbContext db,
         IImageStorage imageStorage,
@@ -182,22 +189,30 @@ public class ProductsService
     private async Task<T> GetOrLoadAsync<T>(string key, Func<Task<T>> load, CancellationToken ct)
     {
         if (_cache is null || RedisPaused())
+        {
+            LastCacheStatus = "BYPASS";
             return await load();
+        }
 
         try
         {
             var cached = await _cache.GetAsync(key, ct);
             if (cached is not null)
+            {
+                LastCacheStatus = "HIT";
                 return JsonSerializer.Deserialize<T>(cached)!; // a hit: no database at all
+            }
         }
         catch (Exception e) when (e is RedisException or TimeoutException or JsonException)
         {
             _logger.LogWarning(e, "Could not read {Key} from Redis; using the database", key);
             if (e is not JsonException)
                 PauseRedis();
+            LastCacheStatus = "BYPASS";
             return await load();
         }
 
+        LastCacheStatus = "MISS";
         var value = await load(); // a miss
         try
         {

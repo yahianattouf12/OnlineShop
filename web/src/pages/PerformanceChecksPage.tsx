@@ -28,8 +28,56 @@ interface Check {
 
 const ms = (value: number) => `${value < 100 ? value.toFixed(1) : Math.round(value).toLocaleString('en-US')} ms`;
 const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+/** Nearest-rank percentile of a few browser timings (p95 of 15 values is the slowest but one). */
+const percentile = (values: number[], p: number) => [...values].sort((a, b) => a - b)[Math.max(0, Math.ceil(values.length * p) - 1)];
 const DEEP_PAGE = '?page=10000&pageSize=10';
 const TRIES = 3;
+const LIST_PAGES = 15;
+
+interface RoundStats {
+  p50: number;
+  p95: number;
+  caches: string[];
+}
+
+const summarize = (round: { ms: number; cache: string }[]): RoundStats => ({
+  p50: median(round.map((r) => r.ms)),
+  p95: percentile(round.map((r) => r.ms), 0.95),
+  caches: round.map((r) => r.cache),
+});
+
+const countOf = (caches: string[]) =>
+  Object.entries(caches.reduce<Record<string, number>>((all, c) => ({ ...all, [c]: (all[c] ?? 0) + 1 }), {}))
+    .map(([cache, n]) => `${n} × ${cache}`)
+    .join(', ');
+
+/** Cold (database) against warm (Redis): one bar per round, the length is the p50 time. */
+function ColdWarm({ cold, warm }: { cold: RoundStats; warm: RoundStats }) {
+  const longest = Math.max(cold.p50, warm.p50, 0.001);
+  const rows = [
+    { label: 'Cold: database, then cached', stats: cold },
+    { label: 'Warm: answered by Redis', stats: warm },
+  ];
+  return (
+    <div className="cold-warm" role="img" aria-label={`p50 cold ${ms(cold.p50)}, warm ${ms(warm.p50)}`}>
+      {rows.map(({ label, stats }) => (
+        <div key={label} className="cold-warm-row">
+          <span className="body-sm">
+            {label} <span className="caption muted">({countOf(stats.caches)})</span>
+          </span>
+          <span className="cold-warm-track">
+            <span className="cold-warm-bar" style={{ width: `${Math.max(2, (stats.p50 / longest) * 100)}%` }} />
+          </span>
+          <span className="body-sm strong tabular cold-warm-value">{ms(stats.p50)}</span>
+        </div>
+      ))}
+      <span className="caption muted">
+        p50 of {cold.caches.length} requests each; p95 cold {ms(cold.p95)}, warm {ms(warm.p95)}. Single requests from this browser: the load
+        test numbers (k6) are in docs/r3-report.md.
+      </span>
+    </div>
+  );
+}
 
 function Commands({ intro, lines, after }: { intro: string; lines: string; after?: ReactNode }) {
   return (
@@ -106,6 +154,63 @@ const CHECKS: Check[] = [
       } finally {
         await timed(log, `Put the price back to ${original.price}`, url, { method: 'PUT', body: { ...details, price: original.price } }).catch(() => {});
       }
+    },
+  },
+  {
+    id: 'redis',
+    title: 'Redis: the same requests, first from the database, then from the cache.',
+    proves:
+      'The admin saves the product without changing it: that starts a new list generation, so no list page is in Redis any more. Then the same 15 list pages are read twice. The first round must come from the database (X-Cache: MISS) and fill Redis; the second must come from Redis (X-Cache: HIT), with no database query.',
+    expected: `${LIST_PAGES} × MISS, then ${LIST_PAGES} × HIT, faster`,
+    run: async ({ product, log }) => {
+      const url = `/products/${product.id}`;
+      const current = await timed(log, `Read ${product.name}`, url, { token: null });
+      const p = current.body as Product | null;
+      if (current.status !== 200 || !p) return { pass: false, summary: `Reading the product failed (${current.status}).`, steps: log };
+      const saved = await timed(log, 'Admin saves it unchanged: a new list generation, the cached list pages are out', url, {
+        method: 'PUT',
+        body: { name: p.name, description: p.description, category: p.category, price: p.price },
+      });
+      if (saved.status !== 200) return { pass: false, summary: `Saving the product failed (${saved.status}).`, steps: log, body: saved.body };
+
+      const round = async (name: string) => {
+        const results: { ms: number; cache: string; status: number }[] = [];
+        for (let page = 1; page <= LIST_PAGES; page++) {
+          const r = await timed(log, `${name}: list page ${page}`, `/products?page=${page}&pageSize=12`, { token: null });
+          results.push({ ms: log[log.length - 1].ms, cache: r.headers['x-cache'] ?? 'no header', status: r.status });
+        }
+        return results;
+      };
+      const coldRound = await round('Cold');
+      const warmRound = await round('Warm');
+      const cold = summarize(coldRound);
+      const warm = summarize(warmRound);
+      const all = [...coldRound, ...warmRound];
+
+      if (all.some((r) => r.status !== 200)) {
+        return { pass: false, summary: 'Some list pages did not answer 200: see the log.', steps: log };
+      }
+      if (all.every((r) => r.cache === 'no header')) {
+        return { pass: false, summary: 'The API sends no X-Cache header. Rebuild the API from this branch.', steps: log };
+      }
+      if (all.some((r) => r.cache === 'BYPASS')) {
+        return {
+          pass: false,
+          summary: 'X-Cache: BYPASS, so Redis is off or paused. Start it with docker-compose.cache.yml and run this again.',
+          steps: log,
+          visual: <ColdWarm cold={cold} warm={warm} />,
+        };
+      }
+      const pass = cold.caches.every((c) => c === 'MISS') && warm.caches.every((c) => c === 'HIT');
+      return {
+        pass,
+        summary: pass
+          ? `The first round came from the database (all MISS), the second from Redis (all HIT): p50 ${ms(cold.p50)} → ${ms(warm.p50)}.`
+          : `Expected all MISS then all HIT; got ${countOf(cold.caches)}, then ${countOf(warm.caches)}.`,
+        steps: log,
+        visual: <ColdWarm cold={cold} warm={warm} />,
+        body: { cold: { p50Ms: +cold.p50.toFixed(1), p95Ms: +cold.p95.toFixed(1) }, warm: { p50Ms: +warm.p50.toFixed(1), p95Ms: +warm.p95.toFixed(1) } },
+      };
     },
   },
   {
@@ -254,7 +359,7 @@ export function PerformanceChecksPage() {
         <div className="card stack gap-md" style={{ marginBottom: 'var(--space-lg)' }}>
           <div className="field">
             <label className="field-label" htmlFor="perf-product">
-              Product to test with (checks 1 and 2)
+              Product to test with (checks 1 to 3)
             </label>
             <select id="perf-product" className="select" value={product?.id ?? ''} onChange={(e) => setProductId(e.target.value)}>
               {items.map((p) => (
@@ -265,7 +370,8 @@ export function PerformanceChecksPage() {
             </select>
           </div>
           <p className="caption muted">
-            Check 2 changes the price and puts it back. Check 3 needs the 200,000 test orders and takes a few seconds: the old query is slow on
+            Check 2 changes the price and puts it back; check 3 saves the product unchanged. Every product read shows X-Cache: HIT (Redis), MISS
+            (database, now cached) or BYPASS (Redis off). Check 4 needs the 200,000 test orders and takes a few seconds: the old query is slow on
             purpose. For the load numbers (p50, p95, p99 at 50 requests per second), see <span className="mono">docs/r3-report.md</span>.
           </p>
         </div>
