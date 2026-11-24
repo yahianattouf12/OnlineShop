@@ -29,4 +29,7 @@
   <ItemGroup>
     <Protobuf Include="..\..\proto\inventory.proto" GrpcServices="Client" Link="Protos\inventory.proto" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Shop.Messaging\Shop.Messaging.csproj" />
+  </ItemGroup>
 </Project>
