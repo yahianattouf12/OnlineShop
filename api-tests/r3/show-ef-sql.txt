@@ -1,0 +1,29 @@
+# Requirement 3 demo: the SQL that EF Core sends for the admin order list, page 10,000.
+# NEW query (ListAsync, GET /orders) vs OLD query (ListLegacyAsync, GET /orders/legacy).
+# Paste in PowerShell, from the OnlineShop folder.
+
+# 0. Once per window: the r3practice project + the $admin token
+. "D:\programming\projects\LEARNING\مشاريع سنة خامسة\فصل أول\مشروع تطبيقات الانترنت\Assets\Claude\r3-terminal.ps1"
+
+
+# 1. NEW query: ListAsync (GET /orders). The page is picked FIRST (inner LIMIT/OFFSET), the items are counted AFTER (outer query).
+$t = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+Invoke-RestMethod "http://localhost:8080/api/v1/orders?page=10000&pageSize=10" -Headers @{ Authorization = "Bearer $admin" } | Out-Null
+Start-Sleep -Milliseconds 800
+docker compose logs app --since $t --no-log-prefix
+
+
+# 2. OLD query: ListLegacyAsync (GET /orders/legacy). The items are counted INSIDE the LIMIT/OFFSET query (100,000 counts).
+$t = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+Invoke-RestMethod "http://localhost:8080/api/v1/orders/legacy?page=10000&pageSize=10" -Headers @{ Authorization = "Bearer $admin" } | Out-Null
+Start-Sleep -Milliseconds 800
+docker compose logs app --since $t --no-log-prefix
+
+
+# What to point at:
+#   - "Executed DbCommand (184ms)" (new) vs "(682ms)" (old): how long PostgreSQL took.
+#   - Where "SELECT count(*) ... FROM orders."OrderItems"" is:
+#       new: OUTSIDE the "( ... LIMIT @p1 OFFSET @p ) AS o0" part -> runs for the 10 orders of the page only
+#       old: INSIDE  the "( ... LIMIT @p1 OFFSET @p ) AS o2" part -> runs for all 100,000 orders walked past
+#   - 2 queries each time: the total count, then the page (no N+1).
+#   - The 1st time after a restart is slower (warm-up): run each block twice.

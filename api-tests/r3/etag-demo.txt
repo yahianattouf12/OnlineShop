@@ -1,0 +1,11 @@
+k6 run -q -e URL_PATH="/products/$productId" api-tests/r3/load.js                  # about 1.1 MB
+k6 run -q -e URL_PATH="/products/$productId" -e ETAG=$etag api-tests/r3/load.js    # about 483 kB
+
+
+$url = "http://localhost:8080/api/v1/products/$productId"
+curl.exe -s -i $url | Select-String 'HTTP/|ETag|Cache-Control'          # 200 + ETag: W/"..."
+$etag = (curl.exe -s -D - -o NUL $url | Select-String '^ETag: (.*)$').Matches[0].Groups[1].Value.Trim()
+curl.exe -s -i -H "If-None-Match: $etag" $url | Select-String 'HTTP/'  # 304 Not Modified
+
+"without ETag: " + (curl.exe -s -o NUL -w "%{size_download}" $url) + " bytes"                         # 365
+"with ETag:    " + (curl.exe -s -o NUL -w "%{size_download}" -H "If-None-Match: $etag" $url) + " bytes"  # 0
