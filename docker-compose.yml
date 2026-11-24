@@ -29,9 +29,14 @@ services:
       Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       # The inventory service, by its service name. gRPC over plain HTTP/2 inside the Docker network.
       Inventory__Address: http://inventory:50051
+      # Requirement 4: RabbitMQ (the outbox publishes order events there).
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
     volumes:
       - uploads:/app/uploads     # product images survive when the container is removed
-    # No depends_on for inventory on purpose: the app must start and answer clearly even when inventory is down.
+    # No depends_on for inventory (or RabbitMQ, or Soketi) on purpose: the app must start and answer clearly even
+    # when they are down. Orders still work without RabbitMQ: their events wait in the outbox.
     depends_on:
       app-db:
         condition: service_healthy   # wait until PostgreSQL really accepts connections

@@ -9,6 +9,8 @@ WORKDIR /src
 # Copy only the project file and restore first. Docker caches this layer, so the
 # NuGet packages are downloaded again only when the .csproj changes, not on every code change.
 COPY app/Shop.Api/Shop.Api.csproj app/Shop.Api/
+# Requirement 4: the API references the shared messaging project (event + RabbitMQ names).
+COPY app/Shop.Messaging/Shop.Messaging.csproj app/Shop.Messaging/
 RUN dotnet restore app/Shop.Api/Shop.Api.csproj
 
 # The gRPC contract: the build generates the C# client from it (see <Protobuf> in the .csproj).
@@ -16,6 +18,7 @@ RUN dotnet restore app/Shop.Api/Shop.Api.csproj
 COPY proto/ proto/
 
 # Now the rest of the code, then compile into ready-to-run files in /out.
+COPY app/Shop.Messaging/ app/Shop.Messaging/
 COPY app/Shop.Api/ app/Shop.Api/
 RUN dotnet publish app/Shop.Api/Shop.Api.csproj -c Release -o /out --no-restore
 

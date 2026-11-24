@@ -6,6 +6,7 @@ using Shop.Api.Modules.Notifications.Contracts;
 using Shop.Api.Modules.Orders.Dtos;
 using Shop.Api.Modules.Products.Contracts;
 using Shop.Api.Integrations.Inventory;
+using Shop.Messaging;
 
 namespace Shop.Api.Modules.Orders;
 
@@ -42,6 +43,10 @@ public class OrdersService
     {
         // 1. Who is ordering? From the token, never from the request.
         var userId = _currentUser.Id;
+
+        // Requirement 4: the confirmation email goes to this address (also from the token).
+        var email = _currentUser.Email
+            ?? throw new UnauthorizedException("Your session is from before an update. Please log in again.");
 
         // 2. Ask the Products module for names and prices. Unknown products are rejected.
         var productIds = request.Items.Select(i => i.ProductId!.Value).ToList();
@@ -87,9 +92,19 @@ public class OrdersService
         //    The order is saved only if the inventory says yes.
         await ReserveStockAsync(order);
 
-        // 5. The order, its items and its first history entry are saved in ONE transaction: all or nothing.
+        // 5. The order, its items, its first history entry AND the event for the email worker (Requirement 4)
+        //    are saved in ONE transaction: all or nothing. The event waits in the outbox until OutboxPublisher
+        //    hands it to RabbitMQ, so the customer never waits for the email.
         //    If saving fails, the stock we just reserved must go back to the inventory (compensation).
         _db.Orders.Add(order);
+        _db.OutboxMessages.Add(OutboxMessage.OrderCreated(new OrderCreatedEvent(
+            Guid.NewGuid(),
+            order.Id,
+            email,
+            order.TotalAmount,
+            order.Items.Select(i => new OrderCreatedItem(i.ProductName, i.Quantity, i.UnitPrice)).ToList(),
+            now)));
+
         try
         {
             await _db.SaveChangesAsync(ct);

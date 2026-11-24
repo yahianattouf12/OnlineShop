@@ -5,6 +5,10 @@ namespace Shop.Api.Modules.Orders;
 public class OrdersDbContext : DbContext
 {
     public DbSet<Order> Orders { get; set; }
+    
+    // Requirement 4: events waiting to be sent to RabbitMQ (see OutboxMessage).
+    public DbSet<OutboxMessage> OutboxMessages { get; set; }
+
 
     public OrdersDbContext(DbContextOptions<OrdersDbContext> options) : base(options)
     {
@@ -45,6 +49,19 @@ public class OrdersDbContext : DbContext
             entity.Property(i => i.UnitPrice).HasPrecision(10, 2);
             // ProductId has no foreign key on purpose: products live in another module.
         });
+
+        modelBuilder.Entity<OutboxMessage>(entity =>
+        {
+            entity.ToTable("OutboxMessages");
+            entity.HasKey(m => m.Id);
+            entity.Property(m => m.Id).ValueGeneratedNever(); // the event's own id
+            entity.Property(m => m.Type).HasMaxLength(100);
+            entity.Property(m => m.Payload).HasColumnType("jsonb"); // readable and queryable in psql
+            // OutboxPublisher asks for "not published yet, oldest first" every second. A partial index holds only
+            // those rows, so it stays tiny however many messages were sent before.
+            entity.HasIndex(m => m.CreatedAt).HasFilter("\"PublishedAt\" IS NULL");
+        });
+
 
         modelBuilder.Entity<OrderStatusChange>(entity =>
         {

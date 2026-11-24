@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Shop.Api.Common.Data;
+using Shop.Messaging;
 
 namespace Shop.Api.Modules.Orders;
 
@@ -37,6 +38,10 @@ public static class OrdersModule
 
         services.AddHostedService<DatabaseMigrator<OrdersDbContext>>();
         services.AddScoped<OrdersService>();
+        
+        // Requirement 4: the outbox. Saved orders' events are moved to RabbitMQ in the background.
+        services.Configure<RabbitMqOptions>(configuration.GetSection(RabbitMqOptions.SectionName));
+        services.AddHostedService<OutboxPublisher>();
 
         return services;
     }
