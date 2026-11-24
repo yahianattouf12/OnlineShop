@@ -80,6 +80,28 @@ services:
       timeout: 3s
       retries: 10
 
+  # Requirement 4: the message broker. The API publishes order events here; the email worker takes them.
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    # RabbitMQ keeps its data under its node name (rabbit@<hostname>). A fixed hostname means a re-created
+    # container finds its old queues and messages in the volume again.
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    ports:
+      - "15672:15672"            # the management UI: http://localhost:15672 (queues, messages, the DLQ)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq   # durable queues and persistent messages survive a restart
+      # The management UI plus the shovel plugin: it adds "Move messages", to send DLQ messages back to the queue.
+      - ./deploy/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+
   # Optional: adds the demo catalog (12 products with images) through the API.
   # Not started by "docker compose up"; run it with:  docker compose --profile seed run --rm seed
   seed:
@@ -100,3 +122,4 @@ volumes:
   app-db-data:
   uploads:
   inventory-db-data:
+  rabbitmq-data:
