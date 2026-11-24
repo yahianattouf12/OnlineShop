@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ordersApi, usersApi } from '../api/endpoints';
 import { ORDER_STATUSES, type OrderStatus } from '../api/types';
-import { EmptyState, PageHeader, Pagination, ProblemNotice, Segmented, StatusBadge } from '../components/ui';
+import { EmptyState, hideBrokenImage, PageHeader, Pagination, ProblemNotice, Segmented, StatusBadge } from '../components/ui';
 import { formatDateTime, formatMoney, shortId } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 
@@ -16,7 +16,7 @@ function ProductThumbs({ productIds }: { productIds: string[] }) {
   return (
     <div className="thumb-stack" aria-hidden="true">
       {shown.map((id) => (
-        <img key={id} src={`/api/v1/products/${id}/image`} alt="" loading="lazy" />
+        <img key={id} src={`/api/v1/products/${id}/image`} alt="" loading="lazy" onError={hideBrokenImage} />
       ))}
       {more > 0 && <span className="thumb-more">+{more}</span>}
     </div>
@@ -50,7 +50,11 @@ export function OrdersPage({ admin = false }: { admin?: boolean }) {
     <main className="main">
       <PageHeader
         title={admin ? 'Orders.' : 'My orders.'}
-        lead={admin ? 'Every customer’s orders. Open one to move it to its next status.' : 'Everything you’ve ordered, newest first.'}
+        lead={
+          admin
+            ? 'Every customer’s orders. Open one to move it to its next status. With the read replica on, this list comes from it, so a change can take a moment to show here.'
+            : 'Everything you’ve ordered, newest first.'
+        }
       />
 
       <div style={{ marginBottom: 'var(--space-xl)' }}>

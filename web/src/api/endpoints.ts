@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { LoginResponse, Notification, Order, OrderStatus, OrderSummary, Paged, Product, StockResponse, User } from './types';
+import type { LoginResponse, Notification, Order, OrderStatus, OrderSummary, Paged, Product, ProductDetails, StockResponse, User } from './types';
 
 const query = (params: Record<string, string | number | boolean | undefined | null>) => {
   const search = new URLSearchParams();
@@ -27,6 +27,8 @@ export const productsApi = {
   get: (id: string) => api<Product>(`/products/${id}`, { token: null }),
   create: (form: FormData) => api<Product>('/products', { method: 'POST', form }),
   setStock: (id: string, quantity: number) => api<StockResponse>(`/products/${id}/stock`, { method: 'PUT', body: { quantity } }),
+  /** Admin: name, description, price and category. The image and the stock do not change (the answer has no stock). */
+  update: (id: string, details: ProductDetails) => api<Product>(`/products/${id}`, { method: 'PUT', body: details }),
 };
 
 export const ordersApi = {

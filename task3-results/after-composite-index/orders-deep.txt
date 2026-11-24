@@ -1,0 +1,29 @@
+orders-deep
+{
+  "case": "orders-deep",
+  "workload": {
+    "url": "http://app:8080/api/v1/orders?page=10000&pageSize=10",
+    "rate": 20,
+    "duration": "60s",
+    "preAllocatedVUs": 20,
+    "warmup": "15s",
+    "role": "admin",
+    "customerId": null,
+    "expectedOrders": 200000,
+    "expectedStock": null
+  },
+  "expectedStatus": 200,
+  "metrics": {
+    "p50": 19.626788,
+    "p95": 22.389448,
+    "p99": 26.99991,
+    "requests": 1201,
+    "requestsPerSecond": 20.011355287099192,
+    "failedRate": 0,
+    "checkRate": 1,
+    "dropped": 0,
+    "bytesReceived": 2657813,
+    "status200": 1201,
+    "status304": 0
+  }
+}

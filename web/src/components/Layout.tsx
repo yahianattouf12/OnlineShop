@@ -69,6 +69,11 @@ function NavItems() {
           Inventory checks
         </NavLink>
       )}
+      {isAdmin && (
+        <NavLink to="/performance-checks" className={linkClass}>
+          Performance checks
+        </NavLink>
+      )}
     </nav>
   );
 }
@@ -115,13 +120,15 @@ function UserArea() {
 function NavBar() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
+  const { isAdmin } = useAuth();
 
   useEffect(() => {
     setOpen(false);
   }, [location.pathname]);
 
   return (
-    <div className="nav-wrap">
+    // The admin has the most links (three checks pages): a tighter bar, and the menu button up to a wider screen.
+    <div className={`nav-wrap ${isAdmin ? 'nav-crowded' : ''}`}>
       <div className="nav">
         <Link to="/products" className="brand" aria-label="OnlineShop home">
           <BrandMark />
@@ -156,7 +163,7 @@ function Footer() {
       <div className="footer-inner">
         <div className="stack gap-sm">
           <div className="footer-wordmark">OnlineShop.</div>
-          <p className="body-sm faint">Internet Applications course project · Requirement 1: API design and security · Requirement 2: an inventory service over gRPC.</p>
+          <p className="body-sm faint">Internet Applications course project · Requirement 1: API design and security · Requirement 2: an inventory service over gRPC · Requirement 3: performance and caching.</p>
         </div>
         <div className="footer-links">
           <Link to="/products">Shop</Link>

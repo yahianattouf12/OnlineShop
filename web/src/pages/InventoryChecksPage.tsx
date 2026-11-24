@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
-import { exchange, type Exchange } from '../api/client';
+import { exchange } from '../api/client';
 import { productsApi } from '../api/endpoints';
 import type { Product } from '../api/types';
 import { Icon } from '../components/Icon';
+import { ResultView, seconds, timed, type Outcome, type Result, type Step } from '../components/LiveChecks';
 import { Notice, PageHeader, ProblemNotice } from '../components/ui';
 import { useAsync } from '../lib/useAsync';
 
@@ -11,20 +12,6 @@ import { useAsync } from '../lib/useAsync';
  * The admin sets the stock; the orders are placed by a temporary customer this page creates, exactly like
  * api-tests/race-last-unit.mjs. Every check puts the product's stock back to what it was afterwards.
  */
-
-interface Step {
-  label: string;
-  ex: Pick<Exchange, 'method' | 'url' | 'status'> & { statusText?: string };
-  ms: number;
-}
-
-interface Outcome {
-  pass: boolean;
-  summary: ReactNode;
-  steps: Step[];
-  /** The one response worth reading in full (e.g. the 409 refusal). */
-  body?: unknown;
-}
 
 interface Ctx {
   product: Product;
@@ -43,16 +30,6 @@ interface Check {
   /** Shown before running: steps the presenter does by hand (e.g. stopping a container). */
   manual?: ReactNode;
   run?: (ctx: Ctx) => Promise<Outcome>;
-}
-
-type Body = Record<string, unknown> | null;
-type Options = Parameters<typeof exchange>[1];
-
-async function timed(log: Step[], label: string, path: string, options?: Options) {
-  const started = performance.now();
-  const ex = await exchange(path, options);
-  log.push({ label, ex, ms: performance.now() - started });
-  return { ...ex, body: (ex.body && typeof ex.body === 'object' ? ex.body : null) as Body };
 }
 
 /** The current stock of a product, as the app reports it (null: the inventory service did not answer). */
@@ -84,8 +61,6 @@ async function withStockRestored<T>(log: Step[], products: Product[], work: () =
 
 const order = (log: Step[], label: string, token: string, items: { productId: string; quantity: number }[]) =>
   timed(log, label, '/orders', { method: 'POST', body: { items }, token });
-
-const seconds = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 
 const CHECKS: Check[] = [
   {
@@ -267,54 +242,6 @@ docker compose pause inventory    # or slow: no answer, the app gives up at the 
   },
 ];
 
-type Result = { running: boolean; outcome?: Outcome; error?: string };
-
-function ResultView({ result }: { result: Result }) {
-  if (result.running) {
-    return (
-      <div className="check-result">
-        <span className="row gap-xs body-sm muted">
-          <span className="spinner" /> Running…
-        </span>
-      </div>
-    );
-  }
-  if (result.error) {
-    return (
-      <div className="check-result">
-        <Notice tone="error" icon="alert" title="Could not run this check.">
-          {result.error}
-        </Notice>
-      </div>
-    );
-  }
-  const { pass, summary, steps, body } = result.outcome!;
-  return (
-    <div className="check-result">
-      <div className="row gap-sm wrap">
-        <span className={`badge ${pass ? 'badge-ink' : 'badge-error'}`}>
-          <Icon name={pass ? 'check' : 'alert'} size={14} />
-          {pass ? 'Passed' : 'Unexpected result'}
-        </span>
-        <span className="body-sm">{summary}</span>
-      </div>
-      <ol className="list stack gap-xxs body-sm">
-        {steps.map((s, i) => (
-          <li key={i} className="row gap-xs wrap">
-            <span className="mono">
-              {s.ex.method} {s.ex.url} → <span className="strong">{s.ex.status || '—'}</span>
-            </span>
-            <span className="muted">
-              {s.label} · {s.ms < 1000 ? `${Math.round(s.ms)} ms` : seconds(s.ms)}
-            </span>
-          </li>
-        ))}
-      </ol>
-      {body != null && <pre className="code">{JSON.stringify(body, null, 2)}</pre>}
-    </div>
-  );
-}
-
 export function InventoryChecksPage() {
   const products = useAsync(() => productsApi.list({ pageSize: 50 }), []);
   const items = useMemo(() => products.data?.items ?? [], [products.data]);
@@ -442,7 +369,11 @@ export function InventoryChecksPage() {
 
       {finished.length > 0 && (
         <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <Notice icon={passed === finished.length ? 'shield' : 'alert'} title={`${passed} of ${finished.length} checks passed.`} />
+          <Notice
+            tone={passed === finished.length ? 'success' : 'soft'}
+            icon={passed === finished.length ? 'shield' : 'alert'}
+            title={`${passed} of ${finished.length} checks passed.`}
+          />
         </div>
       )}
 

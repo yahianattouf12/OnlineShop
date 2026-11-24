@@ -1,0 +1,28 @@
+{
+  "case": "product-hot",
+  "workload": {
+    "url": "http://app:8080/api/v1/products/f9ed4575-0207-4acc-9aca-89bf221649f8",
+    "rate": 20,
+    "duration": "60s",
+    "preAllocatedVUs": 20,
+    "warmup": "15s",
+    "role": "anonymous",
+    "customerId": null,
+    "expectedOrders": null,
+    "expectedStock": 100
+  },
+  "expectedStatus": 200,
+  "metrics": {
+    "p50": 4.370399,
+    "p95": 7.01681825,
+    "p99": 7.68592644,
+    "requests": 1200,
+    "requestsPerSecond": 20.001029295969783,
+    "failedRate": 0,
+    "checkRate": 1,
+    "dropped": 0,
+    "bytesReceived": 796800,
+    "status200": 1200,
+    "status304": 0
+  }
+}

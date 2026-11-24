@@ -1,0 +1,1 @@
+FAIL Product detail has no ETag yet.

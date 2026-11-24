@@ -6,7 +6,7 @@ import type { Order, OrderStatus } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toasts';
-import { BackLink, ErrorPage, Notice, ProblemNotice, StatusBadge } from '../components/ui';
+import { BackLink, ErrorPage, hideBrokenImage, Notice, ProblemNotice, StatusBadge } from '../components/ui';
 import { formatDateTime, formatMoney, shortId } from '../lib/format';
 import { HAPPY_PATH, NEXT_STATUSES, STATUS_ACTION, STATUS_HELP } from '../lib/orderStatus';
 import { useAsync } from '../lib/useAsync';
@@ -184,7 +184,7 @@ export function OrderDetailPage() {
               <ul className="list">
                 {o.items.map((item) => (
                   <li key={item.productId} className="list-row">
-                    <img className="thumb" src={`/api/v1/products/${item.productId}/image`} alt="" />
+                    <img className="thumb" src={`/api/v1/products/${item.productId}/image`} alt="" onError={hideBrokenImage} />
                     <div className="stack gap-xxs grow">
                       <Link to={`/products/${item.productId}`} className="strong" style={{ textDecoration: 'none' }}>
                         {item.productName}

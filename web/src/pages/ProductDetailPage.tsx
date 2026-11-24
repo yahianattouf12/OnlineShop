@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ApiError } from '../api/client';
 import { productsApi } from '../api/endpoints';
+import type { Product } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { MAX_LINES, MAX_QUANTITY, useCart } from '../cart/CartContext';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toasts';
-import { BackLink, ErrorPage, Notice, StockBadge, StockEditor } from '../components/ui';
+import { BackLink, ErrorPage, Notice, ProblemNotice, StockBadge, StockEditor, TextAreaField, TextField } from '../components/ui';
 import { formatDate, formatMoney } from '../lib/format';
 import { useAsync } from '../lib/useAsync';
 
@@ -30,6 +32,98 @@ export function Stepper({
       <button type="button" onClick={() => onChange(value + 1)} disabled={value >= max} aria-label="Increase">
         <Icon name="plus" size={16} />
       </button>
+    </div>
+  );
+}
+
+/**
+ * Admin: edit the name, description, price and category (PUT /products/{id}). The API clears the product's
+ * cached copies in Redis on save, and the ETag changes with the data, so shoppers see the change at once.
+ */
+function DetailsEditor({ product, onSaved }: { product: Product; onSaved: (saved: Product) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(product.name);
+  const [category, setCategory] = useState(product.category);
+  const [price, setPrice] = useState(String(product.price));
+  const [description, setDescription] = useState(product.description);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+
+  const open = () => {
+    setName(product.name);
+    setCategory(product.category);
+    setPrice(String(product.price));
+    setDescription(product.description);
+    setError(undefined);
+    setEditing(true);
+  };
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    try {
+      // An empty or invalid price is sent as 0, so the API answers with its own "between 0.01 and 1,000,000" message.
+      onSaved(await productsApi.update(product.id, { name, category, description, price: Number(price) || 0 }));
+      setEditing(false);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const fieldErrors = error instanceof ApiError && error.problem.errors ? error : undefined;
+  const errorsFor = (field: string) => fieldErrors?.fieldErrors(field);
+
+  return (
+    <div className="card-soft stack gap-md">
+      <div className="row between wrap gap-sm">
+        <div className="stack gap-xxs">
+          <h2 className="title">Details.</h2>
+          <p className="body-sm muted">Saved changes show at once, in the shop and on this page, even though products are cached.</p>
+        </div>
+        {!editing && (
+          <button type="button" className="btn btn-outline btn-sm" onClick={open}>
+            Edit details
+          </button>
+        )}
+      </div>
+      {editing && (
+        <form className="stack gap-md" onSubmit={save} noValidate>
+          <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} error={errorsFor('Name')} maxLength={200} />
+          <div className="form-grid">
+            <TextField label="Category" value={category} onChange={(e) => setCategory(e.target.value)} error={errorsFor('Category')} maxLength={50} />
+            <TextField
+              label="Price (USD)"
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              error={errorsFor('Price')}
+            />
+          </div>
+          <TextAreaField
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            error={errorsFor('Description')}
+            maxLength={2000}
+            rows={4}
+          />
+          {error != null && !fieldErrors && <ProblemNotice error={error} />}
+          <div className="row gap-sm">
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : 'Save changes'}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setEditing(false)} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -158,6 +252,17 @@ export function ProductDetailPage() {
                   .
                 </p>
               </div>
+            )}
+
+            {isAdmin && (
+              <DetailsEditor
+                product={p}
+                onSaved={(saved) => {
+                  // The answer to PUT has no stock (it lives in the inventory service): keep the one shown.
+                  product.setData({ ...saved, stock: p.stock });
+                  toast(`${saved.name} saved. Shoppers see the change now.`);
+                }}
+              />
             )}
 
             {isAdmin && (

@@ -1,0 +1,23 @@
+{
+  "id": "1cd065e5-27bc-405c-819c-722f47ac1211",
+  "status": "passed",
+  "phase": "complete",
+  "startedAt": "2026-11-11T09:35:52.942Z",
+  "finishedAt": "2026-11-11T09:35:54.225Z",
+  "error": null,
+  "config": {
+    "orders": 0,
+    "products": 20000,
+    "stockMin": 100,
+    "stockMax": 100,
+    "customers": 1000,
+    "customerEvery": 50
+  },
+  "logs": [
+    "Starting fixture preparation on the dedicated benchmark stack.",
+    "Preparing studio-owned products, orders, order items and status history. Other records are retained.",
+    "Setting stock across the configured range in the separate inventory database.",
+    "Ready: 0 studio orders and 20000 studio products. The whole database contains 200000 orders and 20012 products.",
+    "Customer fixture accounts left over from a smaller resize are retained; synthetic owners have no usable password. Product images are not generated."
+  ]
+}

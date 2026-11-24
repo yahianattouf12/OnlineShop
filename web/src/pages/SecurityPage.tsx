@@ -139,7 +139,7 @@ function ResultView({ check, result }: { check: Check; result: Result }) {
   return (
     <div className="check-result">
       <div className="row gap-sm wrap">
-        <span className={`badge ${ok ? 'badge-ink' : 'badge-error'}`}>
+        <span className={`badge ${ok ? 'badge-success' : 'badge-error'}`}>
           <Icon name={ok ? 'check' : 'alert'} size={14} />
           {ok ? 'Rejected as expected' : 'Unexpected result'}
         </span>
@@ -210,7 +210,11 @@ export function SecurityPage() {
 
       {finished.length > 0 && (
         <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <Notice icon={passed === finished.length ? 'shield' : 'alert'} title={`${passed} of ${finished.length} checks rejected as expected.`} />
+          <Notice
+            tone={passed === finished.length ? 'success' : 'soft'}
+            icon={passed === finished.length ? 'shield' : 'alert'}
+            title={`${passed} of ${finished.length} checks rejected as expected.`}
+          />
         </div>
       )}
 

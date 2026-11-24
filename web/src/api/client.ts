@@ -30,6 +30,8 @@ export interface Exchange {
   statusText: string;
   headers: Record<string, string>;
   body: unknown;
+  /** Size of the response body in bytes (0 for an empty 304). */
+  bytes: number;
 }
 
 let tokenProvider: () => string | null = () => null;
@@ -49,11 +51,13 @@ interface RequestOptions {
   form?: FormData;
   /** Overrides the stored token: a specific token, or null to send none. */
   token?: string | null;
+  /** Extra request headers, e.g. If-None-Match for the Performance checks page. */
+  headers?: Record<string, string>;
   signal?: AbortSignal;
 }
 
 async function send(path: string, options: RequestOptions) {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+  const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
   const token = options.token === undefined ? tokenProvider() : options.token;
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -81,7 +85,7 @@ async function send(path: string, options: RequestOptions) {
       parsed = text;
     }
   }
-  return { response, parsed };
+  return { response, parsed, bytes: new TextEncoder().encode(text).length };
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -103,7 +107,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
 /** Like api(), but never throws: returns the full request/response for display. */
 export async function exchange(path: string, options: RequestOptions = {}): Promise<Exchange> {
-  const { response, parsed } = await send(path, options);
+  const { response, parsed, bytes } = await send(path, options);
   const headers: Record<string, string> = {};
   response.headers.forEach((value, key) => {
     headers[key] = value;
@@ -116,5 +120,6 @@ export async function exchange(path: string, options: RequestOptions = {}): Prom
     statusText: response.statusText,
     headers,
     body: parsed,
+    bytes,
   };
 }

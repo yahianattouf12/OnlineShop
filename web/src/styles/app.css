@@ -403,7 +403,7 @@ p {
   }
 }
 
-@media (min-width: 961px) {
+@media (min-width: 1101px) {
   .nav-panel {
     display: none;
   }
@@ -886,6 +886,12 @@ p {
   color: var(--color-error-text);
 }
 
+.badge-success {
+  border-color: var(--color-success-hairline);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
 /* Stock, from the inventory service: the order status hues (green in stock, amber low, red out, grey unknown) */
 .stock-in {
   background: var(--color-status-delivered-bg);
@@ -942,6 +948,16 @@ p {
 .notice-error .muted {
   color: var(--color-error-text);
   opacity: 0.75;
+}
+
+.notice-success {
+  background: var(--color-success-soft);
+  box-shadow: inset 0 0 0 1px var(--color-success-hairline);
+  color: var(--color-success-text);
+}
+
+.notice-success svg {
+  color: var(--color-success);
 }
 
 .notice-title {
@@ -1385,4 +1401,96 @@ p {
   flex-direction: column;
   gap: var(--space-sm);
   font-size: 14px;
+}
+
+/* The admin's bar: eight links in the 1200px header. Tighter links, and the email moves to the menu panel;
+   below 1280px the admin gets the menu button (like everyone below 1100px). */
+@media (min-width: 1101px) {
+  .nav-crowded .nav-link {
+    padding: 0 var(--space-sm);
+  }
+
+  .nav-crowded .nav-user .nav-email {
+    display: none;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1279px) {
+  .nav-crowded .nav .nav-menu-button {
+    display: inline-flex;
+  }
+
+  .nav-crowded .nav .nav-links,
+  .nav-crowded .nav .nav-user {
+    display: none;
+  }
+
+  .nav-crowded .nav-panel {
+    display: block;
+    max-width: var(--content-width);
+    margin: var(--space-xs) auto 0;
+    padding: var(--space-xs);
+    border-radius: var(--radius-md);
+    background: var(--color-canvas-soft);
+  }
+
+  .nav-crowded .nav-panel .nav-links,
+  .nav-crowded .nav-panel .nav-user {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    margin: 0;
+  }
+
+  .nav-crowded .nav-panel .nav-user {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: var(--space-xs) var(--space-md) var(--space-xs);
+  }
+
+  .nav-crowded .nav-panel .nav-email {
+    display: inline;
+  }
+}
+
+/* Performance checks: cold (database) vs warm (Redis), one bar each, length = p50 time */
+.cold-warm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas);
+}
+
+.cold-warm-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) 1fr 72px;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.cold-warm-track {
+  height: 12px;
+}
+
+.cold-warm-bar {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0; /* square at the baseline, rounded at the value end */
+  background: var(--color-ink);
+}
+
+.cold-warm-value {
+  text-align: right;
+}
+
+@media (max-width: 719px) {
+  .cold-warm-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .cold-warm-row > :first-child {
+    grid-column: 1 / -1;
+  }
 }
