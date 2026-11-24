@@ -886,6 +886,12 @@ p {
   color: var(--color-error-text);
 }
 
+.badge-success {
+  border-color: var(--color-success-hairline);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
 /* Stock, from the inventory service: the order status hues (green in stock, amber low, red out, grey unknown) */
 .stock-in {
   background: var(--color-status-delivered-bg);
@@ -942,6 +948,16 @@ p {
 .notice-error .muted {
   color: var(--color-error-text);
   opacity: 0.75;
+}
+
+.notice-success {
+  background: var(--color-success-soft);
+  box-shadow: inset 0 0 0 1px var(--color-success-hairline);
+  color: var(--color-success-text);
+}
+
+.notice-success svg {
+  color: var(--color-success);
 }
 
 .notice-title {

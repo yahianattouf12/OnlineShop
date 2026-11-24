@@ -17,6 +17,10 @@
   --color-error-text: #b42318; /* error text, 6.5:1 on white and on --color-error-soft */
   --color-error-soft: #fef3f2;
   --color-error-hairline: #fecdca;
+  --color-success: #17b26a; /* success only: passed checks, success icons */
+  --color-success-text: #067647; /* success text, 6:1 or better on white and on --color-success-soft */
+  --color-success-soft: #ecfdf3;
+  --color-success-hairline: #abefc6;
 
   /* Order status: a strong text color on a translucent tint of the same hue (each 4.5:1 or better) */
   --color-status-pending: #b54708;

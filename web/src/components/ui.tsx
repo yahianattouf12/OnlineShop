@@ -224,10 +224,13 @@ export function Notice({
   icon?: IconName;
   title?: ReactNode;
   children?: ReactNode;
-  tone?: 'soft' | 'error';
+  tone?: 'soft' | 'error' | 'success';
 }) {
   return (
-    <div className={`notice ${tone === 'error' ? 'notice-error' : ''}`} role={tone === 'error' ? 'alert' : undefined}>
+    <div
+      className={`notice ${tone === 'error' ? 'notice-error' : tone === 'success' ? 'notice-success' : ''}`}
+      role={tone === 'error' ? 'alert' : tone === 'success' ? 'status' : undefined}
+    >
       <Icon name={icon} size={18} />
       <div className="stack gap-xxs">
         {title && <div className="notice-title">{title}</div>}

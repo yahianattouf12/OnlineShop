@@ -64,7 +64,7 @@ export function ResultView({ result }: { result: Result }) {
   return (
     <div className="check-result">
       <div className="row gap-sm wrap">
-        <span className={`badge ${pass ? 'badge-ink' : 'badge-error'}`}>
+        <span className={`badge ${pass ? 'badge-success' : 'badge-error'}`}>
           <Icon name={pass ? 'check' : 'alert'} size={14} />
           {pass ? 'Passed' : 'Unexpected result'}
         </span>

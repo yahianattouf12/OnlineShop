@@ -1,0 +1,28 @@
+{
+  "case": "orders-first",
+  "workload": {
+    "url": "http://app:8080/api/v1/orders?page=1&pageSize=10",
+    "rate": 20,
+    "duration": "60s",
+    "preAllocatedVUs": 20,
+    "warmup": "15s",
+    "role": "admin",
+    "customerId": null,
+    "expectedOrders": 200000,
+    "expectedStock": null
+  },
+  "expectedStatus": 200,
+  "metrics": {
+    "p50": 9.303307499999999,
+    "p95": 13.614937949999998,
+    "p99": 15.69394502,
+    "requests": 1200,
+    "requestsPerSecond": 20.000874193875745,
+    "failedRate": 0,
+    "checkRate": 1,
+    "dropped": 0,
+    "bytesReceived": 2649600,
+    "status200": 1200,
+    "status304": 0
+  }
+}

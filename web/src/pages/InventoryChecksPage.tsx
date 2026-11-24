@@ -369,7 +369,11 @@ export function InventoryChecksPage() {
 
       {finished.length > 0 && (
         <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <Notice icon={passed === finished.length ? 'shield' : 'alert'} title={`${passed} of ${finished.length} checks passed.`} />
+          <Notice
+            tone={passed === finished.length ? 'success' : 'soft'}
+            icon={passed === finished.length ? 'shield' : 'alert'}
+            title={`${passed} of ${finished.length} checks passed.`}
+          />
         </div>
       )}
 

@@ -1,0 +1,211 @@
+{
+  "runs": [
+    {
+      "id": "d1dd9364-d560-4839-81ea-77e38d482a76",
+      "label": "after-composite-index",
+      "cases": [
+        "orders-deep"
+      ],
+      "etag": false,
+      "profile": "standard",
+      "plan": {
+        "warmup": "15s",
+        "duration": "60s",
+        "seconds": 75,
+        "rate": 20
+      },
+      "productId": "f9ed4575-0207-4acc-9aca-89bf221649f8",
+      "status": "passed",
+      "startedBy": "admin@shop.local",
+      "createdAt": "2026-11-11T08:33:16.794Z",
+      "finishedAt": "2026-11-11T08:34:31.972Z",
+      "error": null,
+      "current": null,
+      "steps": [
+        {
+          "case": "orders-deep",
+          "status": "passed",
+          "startedAt": "2026-11-11T08:33:16.798Z",
+          "finishedAt": "2026-11-11T08:34:31.957Z",
+          "metrics": {
+            "p50": 19.626788,
+            "p95": 22.389448,
+            "p99": 26.99991,
+            "requests": 1201,
+            "requestsPerSecond": 20.011355287099192,
+            "failedRate": 0,
+            "checkRate": 1,
+            "dropped": 0,
+            "bytesReceived": 2657813,
+            "status200": 1201,
+            "status304": 0
+          },
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "e730ac9d-d643-4f20-aaa3-736a528c91c1",
+      "label": "before-composite-index",
+      "cases": [
+        "orders-deep"
+      ],
+      "etag": false,
+      "profile": "standard",
+      "plan": {
+        "warmup": "15s",
+        "duration": "60s",
+        "seconds": 75,
+        "rate": 20
+      },
+      "productId": "f9ed4575-0207-4acc-9aca-89bf221649f8",
+      "status": "passed",
+      "startedBy": "admin@shop.local",
+      "createdAt": "2026-11-11T08:30:21.733Z",
+      "finishedAt": "2026-11-11T08:31:36.917Z",
+      "error": null,
+      "current": null,
+      "steps": [
+        {
+          "case": "orders-deep",
+          "status": "passed",
+          "startedAt": "2026-11-11T08:30:21.737Z",
+          "finishedAt": "2026-11-11T08:31:36.910Z",
+          "metrics": {
+            "p50": 27.235857000000003,
+            "p95": 30.055206199999997,
+            "p99": 34.79017006,
+            "requests": 1200,
+            "requestsPerSecond": 20.001073458945946,
+            "failedRate": 0,
+            "checkRate": 1,
+            "dropped": 0,
+            "bytesReceived": 2655600,
+            "status200": 1200,
+            "status304": 0
+          },
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "17196426-502f-443e-af0c-7a2193a02f9d",
+      "label": "before",
+      "cases": [
+        "orders-first",
+        "orders-deep",
+        "product-hot",
+        "product-etag"
+      ],
+      "etag": false,
+      "profile": "standard",
+      "plan": {
+        "warmup": "15s",
+        "duration": "60s",
+        "seconds": 75,
+        "rate": 20
+      },
+      "productId": "f9ed4575-0207-4acc-9aca-89bf221649f8",
+      "status": "passed",
+      "startedBy": "admin@shop.local",
+      "createdAt": "2026-11-09T11:13:08.455Z",
+      "finishedAt": "2026-11-09T11:18:09.494Z",
+      "error": null,
+      "current": null,
+      "steps": [
+        {
+          "case": "orders-first",
+          "status": "passed",
+          "startedAt": "2026-11-09T11:13:08.459Z",
+          "finishedAt": "2026-11-09T11:14:23.694Z",
+          "metrics": {
+            "p50": 9.303307499999999,
+            "p95": 13.614937949999998,
+            "p99": 15.69394502,
+            "requests": 1200,
+            "requestsPerSecond": 20.000874193875745,
+            "failedRate": 0,
+            "checkRate": 1,
+            "dropped": 0,
+            "bytesReceived": 2649600,
+            "status200": 1200,
+            "status304": 0
+          },
+          "error": null
+        },
+        {
+          "case": "orders-deep",
+          "status": "passed",
+          "startedAt": "2026-11-09T11:14:23.726Z",
+          "finishedAt": "2026-11-09T11:15:39.232Z",
+          "metrics": {
+            "p50": 175.1111,
+            "p95": 189.895249,
+            "p99": 200.645893,
+            "requests": 1201,
+            "requestsPerSecond": 19.957025207926883,
+            "failedRate": 0,
+            "checkRate": 1,
+            "dropped": 0,
+            "bytesReceived": 2657813,
+            "status200": 1201,
+            "status304": 0
+          },
+          "error": null
+        },
+        {
+          "case": "product-hot",
+          "status": "passed",
+          "startedAt": "2026-11-09T11:15:39.237Z",
+          "finishedAt": "2026-11-09T11:16:54.362Z",
+          "metrics": {
+            "p50": 4.370399,
+            "p95": 7.01681825,
+            "p99": 7.68592644,
+            "requests": 1200,
+            "requestsPerSecond": 20.001029295969783,
+            "failedRate": 0,
+            "checkRate": 1,
+            "dropped": 0,
+            "bytesReceived": 796800,
+            "status200": 1200,
+            "status304": 0
+          },
+          "error": null
+        },
+        {
+          "case": "product-etag",
+          "status": "passed",
+          "startedAt": "2026-11-09T11:16:54.368Z",
+          "finishedAt": "2026-11-09T11:18:09.488Z",
+          "metrics": {
+            "p50": 4.051687,
+            "p95": 6.639506,
+            "p99": 7.510238,
+            "requests": 1201,
+            "requestsPerSecond": 20.016221279054914,
+            "failedRate": 0,
+            "checkRate": 1,
+            "dropped": 0,
+            "bytesReceived": 797464,
+            "status200": 1201,
+            "status304": 0
+          },
+          "error": null
+        }
+      ]
+    }
+  ],
+  "proofs": [
+    {
+      "id": "3919a13e-8eb7-48d4-9585-775be9b6e407",
+      "mode": "etag-stock",
+      "title": "A stock change shows up at once, even with the old ETag",
+      "passed": false,
+      "output": "FAIL Product detail has no ETag yet.",
+      "startedAt": "2026-11-09T11:48:51.342Z",
+      "durationMs": 132,
+      "startedBy": "admin@shop.local"
+    }
+  ]
+}
