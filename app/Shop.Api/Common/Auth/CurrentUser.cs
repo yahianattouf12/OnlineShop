@@ -12,6 +12,9 @@ public interface ICurrentUser
     Guid Id { get; }
 
     bool IsAdmin { get; }
+
+    /// <summary>The email from the token. Null in a token made before Requirement 4 (log in again).</summary>
+    string? Email { get; }
 }
 
 public class CurrentUser : ICurrentUser
@@ -30,4 +33,6 @@ public class CurrentUser : ICurrentUser
         : throw new InvalidOperationException("The request has no authenticated user.");
 
     public bool IsAdmin => Principal?.IsInRole(Roles.Admin) == true;
+
+    public string? Email => Principal?.FindFirstValue(AppClaims.Email);
 }

@@ -44,7 +44,7 @@ public class UsersService
             throw new UnauthorizedException("Invalid email or password.");
         }
 
-        var token = _tokenService.CreateToken(user.Id, user.Role);
+        var token = _tokenService.CreateToken(user.Id, user.Email, user.Role);
         return new LoginResponse(token.Token, token.ExpiresAtUtc, user.Role);
     }
 

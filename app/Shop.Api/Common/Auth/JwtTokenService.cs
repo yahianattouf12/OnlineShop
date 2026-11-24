@@ -18,7 +18,7 @@ public class JwtTokenService
         _options = options.Value;
     }
 
-    public AccessToken CreateToken(Guid userId, string role)
+    public AccessToken CreateToken(Guid userId, string email, string role)
     {
         var expiresAt = DateTime.UtcNow.AddMinutes(_options.ExpiryMinutes);
 
@@ -31,6 +31,7 @@ public class JwtTokenService
             [
                 new Claim(AppClaims.UserId, userId.ToString()),
                 new Claim(AppClaims.Role, role),
+                new Claim(AppClaims.Email, email),
             ]),
             SigningCredentials = new SigningCredentials(CreateSigningKey(_options), SecurityAlgorithms.HmacSha256),
         };
