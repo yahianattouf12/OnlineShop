@@ -23,6 +23,8 @@ services:
       # "Error: libgssapi_krb5.so.2: cannot open shared object file" on every start.
       ConnectionStrings__Default: Host=app-db;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable
       Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env}
+      # Token lifetime in minutes (at most 1440 = one day). Default 60; set JWT_EXPIRY_MINUTES in .env to change it.
+      Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-60}
       Admin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
       Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       # The inventory service, by its service name. gRPC over plain HTTP/2 inside the Docker network.
