@@ -1,4 +1,7 @@
+using System.Net.Http.Headers;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Shop.Api.Common.Data;
 using Shop.Messaging;
 
@@ -42,6 +45,16 @@ public static class OrdersModule
         // Requirement 4: the outbox. Saved orders' events are moved to RabbitMQ in the background.
         services.Configure<RabbitMqOptions>(configuration.GetSection(RabbitMqOptions.SectionName));
         services.AddHostedService<OutboxPublisher>();
+
+        // Requirement 4, the Queue checks page: RabbitMQ's management API (port 15672, the same login).
+        services.AddHttpClient(QueueChecksController.ManagementClient, (provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<RabbitMqOptions>>().Value;
+            client.BaseAddress = new Uri($"http://{options.Host}:15672/api/");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{options.User}:{options.Password}")));
+            client.Timeout = TimeSpan.FromSeconds(3); // RabbitMQ stopped for a check: answer quickly
+        });
 
         return services;
     }

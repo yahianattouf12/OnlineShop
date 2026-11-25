@@ -75,7 +75,8 @@ export function ResultView({ result }: { result: Result }) {
         {steps.map((s, i) => (
           <li key={i} className="row gap-xs wrap">
             <span className="mono">
-              {s.ex.method} {s.ex.url} → <span className="strong">{s.ex.status || '—'}</span>
+              {/* A WebSocket step has no HTTP status: it shows Soketi's answer (statusText) instead. */}
+              {s.ex.method} {s.ex.url} → <span className="strong">{s.ex.status || s.ex.statusText || '—'}</span>
             </span>
             <span className="muted">
               {s.label} · {s.ms < 1000 ? `${Math.round(s.ms)} ms` : seconds(s.ms)}

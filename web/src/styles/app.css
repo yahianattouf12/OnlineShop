@@ -1403,8 +1403,8 @@ p {
   font-size: 14px;
 }
 
-/* The admin's bar: eight links in the 1200px header. Tighter links, and the email moves to the menu panel;
-   below 1280px the admin gets the menu button (like everyone below 1100px). */
+/* The admin's bar: ten links (four checks pages). Tighter links, and the email moves to the menu panel;
+   below 1380px the admin gets the menu button (like everyone below 1100px). */
 @media (min-width: 1101px) {
   .nav-crowded .nav-link {
     padding: 0 var(--space-sm);
@@ -1415,7 +1415,7 @@ p {
   }
 }
 
-@media (min-width: 1101px) and (max-width: 1279px) {
+@media (min-width: 1101px) and (max-width: 1379px) {
   .nav-crowded .nav .nav-menu-button {
     display: inline-flex;
   }
@@ -1510,3 +1510,33 @@ p {
   }
 }
 
+/* Requirement 4, the Queue checks page: the "Right now" numbers (outbox, RabbitMQ, worker, queues, live). */
+.queue-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-sm);
+}
+
+.queue-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas-soft);
+}
+
+.queue-tile-value {
+  font-size: 22px;
+  font-weight: 650;
+  color: var(--color-ink);
+}
+
+.queue-tile-success {
+  color: var(--color-success-text);
+}
+
+.queue-tile-error {
+  color: var(--color-error-text);
+}

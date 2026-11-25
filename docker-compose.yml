@@ -107,6 +107,8 @@ services:
       - rabbitmq-data:/var/lib/rabbitmq   # durable queues and persistent messages survive a restart
       # The management UI plus the shovel plugin: it adds "Move messages", to send DLQ messages back to the queue.
       - ./deploy/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      # Queue numbers refresh every second instead of every 5 (for the management UI and the Queue checks page).
+      - ./deploy/rabbitmq/onlineshop.conf:/etc/rabbitmq/conf.d/90-onlineshop.conf:ro
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 5s
