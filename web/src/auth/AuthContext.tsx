@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { configureClient } from '../api/client';
 import { authApi } from '../api/endpoints';
 import type { User } from '../api/types';
+import { disconnectRealtime } from '../lib/realtime';
 
 interface Session {
   token: string;
@@ -55,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     writeSession(null);
     setSession(null);
+    disconnectRealtime(); // Requirement 4: no live channels for a logged-out user
   }, []);
 
   // The client reads the token from here and reports a rejected token back.

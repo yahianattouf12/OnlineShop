@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { ordersApi, usersApi } from '../api/endpoints';
-import type { Order, OrderStatus } from '../api/types';
+import type { Order, OrderStatus, OrderStatusChangedLive } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toasts';
-import { BackLink, ErrorPage, hideBrokenImage, Notice, ProblemNotice, StatusBadge } from '../components/ui';
+import { BackLink, ErrorPage, hideBrokenImage, LiveBadge, Notice, ProblemNotice, StatusBadge } from '../components/ui';
 import { formatDateTime, formatMoney, shortId } from '../lib/format';
 import { HAPPY_PATH, NEXT_STATUSES, STATUS_ACTION, STATUS_HELP } from '../lib/orderStatus';
+import { useLiveChannel } from '../lib/realtime';
 import { useAsync } from '../lib/useAsync';
 
 function Timeline({ order }: { order: Order }) {
@@ -119,12 +120,26 @@ function CopyIdButton({ id }: { id: string }) {
 export function OrderDetailPage() {
   const { id = '' } = useParams();
   const { isAdmin } = useAuth();
+  const toast = useToast();
   const location = useLocation();
   const justPlaced = (location.state as { justPlaced?: boolean } | null)?.justPlaced;
   const order = useAsync(() => ordersApi.get(id), [id]);
   const owner = useAsync(
     () => (isAdmin && order.data ? usersApi.list().then((all) => all.find((u) => u.id === order.data!.userId)) : Promise.resolve(undefined)),
     [isAdmin, order.data?.userId],
+  );
+
+  // Requirement 4: this order's own channel. The API lets only its owner (or an admin) join it.
+  // A status change reloads the order (status, timeline) without a page refresh. Reloading on every
+  // (re)join also catches a change that happened while the connection was down.
+  const live = useLiveChannel<OrderStatusChangedLive>(
+    id ? `private-order-${id}` : null,
+    'order.status-changed',
+    (event) => {
+      order.reload();
+      if (!isAdmin) toast(`Your order is now ${event.status}.`);
+    },
+    order.reload,
   );
 
   const back = isAdmin ? '/admin/orders' : '/orders';
@@ -162,6 +177,7 @@ export function OrderDetailPage() {
                   Order <span className="mono" style={{ fontSize: '0.8em' }}>{shortId(o.id)}</span>.
                 </h1>
                 <StatusBadge status={o.status} />
+                <LiveBadge live={live} />
               </div>
               <p className="lead muted">
                 Placed {formatDateTime(o.createdAt)}

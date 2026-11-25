@@ -11,6 +11,8 @@ export default defineConfig({
       '/api': 'http://localhost:8080',
       '/swagger': 'http://localhost:8080',
       '/openapi': 'http://localhost:8080',
+      // Requirement 4: the WebSocket to Soketi (in Docker, nginx does this).
+      '/app': { target: 'ws://localhost:6001', ws: true },
     },
   },
 });

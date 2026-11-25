@@ -112,6 +112,16 @@ export function hideBrokenImage(event: SyntheticEvent<HTMLImageElement>) {
 }
 
 /* ---------- Status ---------- */
+/** Requirement 4: shows that this page gets live updates (we are subscribed to its channel). */
+export function LiveBadge({ live }: { live: boolean }) {
+  return (
+    <span className={`badge ${live ? 'badge-success' : 'badge-outline'}`} title={live ? 'Changes appear here without reloading the page.' : 'Connecting to live updates…'}>
+      <span className={`badge-dot ${live ? 'live-dot' : ''}`} />
+      {live ? 'Live' : 'Connecting…'}
+    </span>
+  );
+}
+
 export function StatusBadge({ status }: { status: OrderStatus }) {
   return (
     <span className={`badge status-${status.toLowerCase()}`}>

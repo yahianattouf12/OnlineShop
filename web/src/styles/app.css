@@ -1494,3 +1494,19 @@ p {
     grid-column: 1 / -1;
   }
 }
+
+/* Requirement 4: live updates. A beating dot on the "Live" badge, and a new order row that flashes once. */
+.live-dot {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.row-new td {
+  animation: row-new 2.5s ease-out;
+}
+
+@keyframes row-new {
+  from {
+    background: var(--color-success-soft);
+  }
+}
+
