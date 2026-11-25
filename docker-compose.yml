@@ -9,6 +9,8 @@ services:
       - "3000:80"
     depends_on:
       - app
+      - soketi                   # Requirement 4: nginx forwards the WebSockets (/app/) to Soketi
+
 
   app:
     build:
@@ -105,6 +107,38 @@ services:
       interval: 5s
       timeout: 10s
       retries: 20
+      
+  # Requirement 4: the worker. A separate program that sends the order confirmation emails.
+  email-worker:
+    build:
+      context: .                 # the repository root, so the Dockerfile can COPY app/Shop.Messaging too
+      dockerfile: app/Shop.EmailWorker/Dockerfile
+    environment:
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      # The external mail service (Mailtrap, Gmail, ...): only in .env, never in the code.
+      Smtp__Host: ${SMTP_HOST:?Set SMTP_HOST in .env}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__Username: ${SMTP_USERNAME:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__From: ${SMTP_FROM:?Set SMTP_FROM in .env}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  # Requirement 4: a ready-made WebSocket server that speaks the Pusher protocol (we do not write our own).
+  # The API tells it what to send (HTTP), the browsers listen to it (WebSocket, through nginx on port 3000).
+  soketi:
+    image: quay.io/soketi/soketi:1.6-16-debian
+    environment:
+      SOKETI_DEFAULT_APP_ID: ${REALTIME_APP_ID:?Set REALTIME_APP_ID in .env}
+      SOKETI_DEFAULT_APP_KEY: ${REALTIME_KEY:?Set REALTIME_KEY in .env}
+      SOKETI_DEFAULT_APP_SECRET: ${REALTIME_SECRET:?Set REALTIME_SECRET in .env}
+    ports:
+      - "6001:6001"              # only for "npm run dev" (Vite); in Docker the browser goes through nginx
+
+
 
 
   # Optional: adds the demo catalog (12 products with images) through the API.
