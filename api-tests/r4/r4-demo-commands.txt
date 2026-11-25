@@ -1,0 +1,43 @@
+Requirement 4: asynchronous queues and live updates. Commands for the demo (PowerShell, from the project folder).
+The easiest way is the website: log in as the admin, open "Queue checks" (http://localhost:3000/queue-checks).
+Login is limited to 5 per minute: wait a minute between two scripts.
+
+# ---------- The two proof scripts ----------
+node api-tests/r4/proof-worker.mjs       # proof 1: stops the worker, places 3 orders, starts it, all 3 emails sent
+node api-tests/r4/proof-realtime.mjs     # proofs 2 and 3 + the channel permissions (403, forged signature)
+
+
+# ---------- Proof 1 by hand: the worker is stopped, nothing is lost ----------
+docker compose stop email-worker
+#   place orders on the website; the management UI shows them waiting:
+#   http://localhost:15672 > Queues > email.order-created > Ready = number of orders
+docker compose start email-worker
+docker compose logs --tail 20 email-worker      # "Email for order ... sent to ..."
+
+
+# ---------- Retries, then the DLQ: a wrong mail password (.env stays as it is) ----------
+$env:SMTP_PASSWORD = 'wrong'; docker compose up -d email-worker; Remove-Item Env:SMTP_PASSWORD
+docker compose logs -f email-worker      # place an order: attempts 1 to 4 (2 s, 5 s, 10 s), then "moving it to the DLQ"
+docker compose up -d email-worker        # back to the real password from .env
+#   send the message again: http://localhost:15672 > Queues > email.order-created.dead > Move messages
+#   > Destination queue: email.order-created > Move messages
+
+
+# ---------- RabbitMQ down: orders still work (the outbox) ----------
+docker compose stop rabbitmq
+#   place an order: 201. The event waits in the outbox:
+docker compose exec app-db psql -U admin -d db_online_shop -c 'SELECT "Type", "CreatedAt", "PublishedAt" FROM orders."OutboxMessages" ORDER BY "CreatedAt" DESC LIMIT 3;'
+docker compose start rabbitmq            # within a few seconds PublishedAt is filled and the email goes out
+
+
+# ---------- Soketi down: orders still work, the page reconnects by itself ----------
+docker compose stop soketi               # the "Live" badge turns "Connecting…"
+#   place an order: 201 (after at most 2 s); the API logs a warning:
+docker compose logs --tail 5 app | Select-String "Could not send the live event"
+docker compose start soketi              # the badge turns "Live" again, no reload
+
+
+# ---------- See the WebSocket in the browser ----------
+#   F12 > Network > WS > the row "<key>?protocol=7..." > Headers: 101 Switching Protocols
+#   Messages: pusher:connection_established, pusher:subscribe, pusher_internal:subscription_succeeded,
+#   pusher:ping / pusher:pong every 30 s, and order.created when a customer orders.
