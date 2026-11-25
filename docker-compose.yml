@@ -31,10 +31,15 @@ services:
       Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       # The inventory service, by its service name. gRPC over plain HTTP/2 inside the Docker network.
       Inventory__Address: http://inventory:50051
-      # Requirement 4: RabbitMQ (the outbox publishes order events there).
+      # Requirement 4: RabbitMQ (the outbox publishes order events there) and Soketi (live updates).
       RabbitMq__Host: rabbitmq
       RabbitMq__User: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
       RabbitMq__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      Realtime__AppId: ${REALTIME_APP_ID:?Set REALTIME_APP_ID in .env}
+      Realtime__Key: ${REALTIME_KEY:?Set REALTIME_KEY in .env}
+      Realtime__Secret: ${REALTIME_SECRET:?Set REALTIME_SECRET in .env}
+      Realtime__Host: soketi
+      Realtime__Port: 6001
     volumes:
       - uploads:/app/uploads     # product images survive when the container is removed
     # No depends_on for inventory (or RabbitMQ, or Soketi) on purpose: the app must start and answer clearly even

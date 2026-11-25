@@ -7,6 +7,7 @@ using Shop.Api.Modules.Orders;
 using Shop.Api.Modules.Products;
 using Shop.Api.Modules.Users;
 using Shop.Api.Integrations.Inventory;
+using Shop.Api.Common.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +22,8 @@ builder.Services.AddApiErrorHandling();
 builder.Services.AddJwtAuth(builder.Configuration);
 builder.Services.AddLoginRateLimiting();
 builder.Services.AddInventoryClient(builder.Configuration);
+builder.Services.AddRealtime(builder.Configuration); // Requirement 4: live updates through Soketi
+
 
 builder.Services.AddNotificationsModule(builder.Configuration);
 builder.Services.AddOrdersModule(builder.Configuration);
