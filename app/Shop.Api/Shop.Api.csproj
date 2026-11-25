@@ -22,11 +22,15 @@
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.14" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="PusherServer" Version="5.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.3.1" />
   </ItemGroup>
   <!-- Requirement 2: generates the C# gRPC client (InventoryService.InventoryServiceClient and the messages)
        from the shared contract at every build. The generated code is in obj/, never edited by hand. -->
   <ItemGroup>
     <Protobuf Include="..\..\proto\inventory.proto" GrpcServices="Client" Link="Protos\inventory.proto" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Shop.Messaging\Shop.Messaging.csproj" />
   </ItemGroup>
 </Project>

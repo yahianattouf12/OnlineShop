@@ -74,6 +74,11 @@ function NavItems() {
           Performance checks
         </NavLink>
       )}
+      {isAdmin && (
+        <NavLink to="/queue-checks" className={linkClass}>
+          Queue checks
+        </NavLink>
+      )}
     </nav>
   );
 }
@@ -127,7 +132,7 @@ function NavBar() {
   }, [location.pathname]);
 
   return (
-    // The admin has the most links (three checks pages): a tighter bar, and the menu button up to a wider screen.
+    // The admin has the most links (four checks pages): a tighter bar, and the menu button up to a wider screen.
     <div className={`nav-wrap ${isAdmin ? 'nav-crowded' : ''}`}>
       <div className="nav">
         <Link to="/products" className="brand" aria-label="OnlineShop home">
@@ -163,7 +168,7 @@ function Footer() {
       <div className="footer-inner">
         <div className="stack gap-sm">
           <div className="footer-wordmark">OnlineShop.</div>
-          <p className="body-sm faint">Internet Applications course project · Requirement 1: API design and security · Requirement 2: an inventory service over gRPC · Requirement 3: performance and caching.</p>
+          <p className="body-sm faint">Internet Applications course project · Requirement 1: API design and security · Requirement 2: an inventory service over gRPC · Requirement 3: performance and caching · Requirement 4: queues and live updates.</p>
         </div>
         <div className="footer-links">
           <Link to="/products">Shop</Link>

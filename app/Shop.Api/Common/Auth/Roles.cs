@@ -12,4 +12,5 @@ public static class AppClaims
 {
     public const string UserId = "sub";
     public const string Role = "role";
+    public const string Email = "email"; // Requirement 4: the email worker needs the customer's address
 }

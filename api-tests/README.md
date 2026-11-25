@@ -1,6 +1,6 @@
-# API tests: Requirement 1 (API Design & Security) and Requirement 2 (Inventory service)
+# API tests: Requirements 1 to 4
 
-Ready requests that cover everything in Requirement 1, in two forms (Requirement 2 has [its own section](#requirement-2-the-inventory-service)):
+Ready requests that cover everything in Requirement 1, in two forms (Requirement 2 has [its own section](#requirement-2-the-inventory-service), Requirement 4 [too](#requirement-4-queues-and-live-updates); Requirement 3 is in `r3/`):
 
 - **`.http` files** for the VS Code **REST Client** extension: the quickest for a live demo. Click **Send Request** above each request.
 - **A Postman collection** with automatic checks: run it once to prove everything is green.
@@ -17,6 +17,9 @@ Ready requests that cover everything in Requirement 1, in two forms (Requirement
 | `5-rate-limit.http` | Brute-force protection on login (429) |
 | `6-inventory.http` | Requirement 2: stock in product details, all-or-nothing reservation (409), what the user sees when inventory is down (⭐) |
 | `race-last-unit.mjs` | Requirement 2 proof (⭐): many orders at the same moment for the last unit, exactly one succeeds. Run: `node api-tests/race-last-unit.mjs` |
+| `r4/proof-worker.mjs` | Requirement 4 proof 1 (⭐): stops the email worker, places 3 orders, starts it again; all 3 emails are sent. Run: `node api-tests/r4/proof-worker.mjs` |
+| `r4/proof-realtime.mjs` | Requirement 4 proofs 2 and 3 (⭐): a new order reaches the admin at once, the admin's approval reaches the customer at once, and strangers cannot join the channels. Run: `node api-tests/r4/proof-realtime.mjs` |
+| `r4/r4-demo-commands.txt` | Requirement 4: the commands for the demos by hand (worker down, wrong mail password, RabbitMQ down, Soketi down) |
 | `.env.example` | Template for `.env`: the admin login that the `.http` files read |
 | `OnlineShop-R1.postman_collection.json` | All the requests for Postman, in 6 folders, with checks |
 | `OnlineShop-local.postman_environment.example.json` | Template for the Postman environment: `baseUrl` and the admin login |
@@ -133,9 +136,35 @@ over gRPC, through the shared contract `proto/inventory.proto`. Every call has a
 The race script logs in twice, and login is limited to 5 per minute: on `429`, wait a minute and run it again.
 It reads the admin login from `api-tests/.env`, or else from the root `.env`.
 
+## Requirement 4: queues and live updates
+
+The order confirmation email goes through an outbox and RabbitMQ to a separate worker (`app/Shop.EmailWorker`);
+new orders and status changes reach the browsers over WebSocket, through Soketi.
+
+**Two ways to show it:**
+
+1. **The website (easiest in front of the TA):** log in as the admin and open **Queue checks** (`/queue-checks`).
+   The card at the top shows the outbox, RabbitMQ, the worker, the queue and the DLQ, every second. Then:
+   - **Run all** runs checks 1, 3, 6, 7 and 8 (no setup needed).
+   - Checks 2, 4, 5 and 9 show a command to run first (stop the worker, a wrong mail password, stop RabbitMQ,
+     stop Soketi). Press **Run**; when the check says "Waiting for you", run the second command.
+2. **The scripts:** `node api-tests/r4/proof-worker.mjs`, then (a minute later) `node api-tests/r4/proof-realtime.mjs`.
+   Both end with `PROOF OK`. The commands for the demos by hand are in `r4/r4-demo-commands.txt`.
+
+| Requirement 4 item | Show this |
+|---|---|
+| The order does not wait for the email | Queue checks 1: `201` in tens of ms, the worker acks seconds later |
+| ⭐ Proof 1: stop the worker, no email is lost | Queue checks 2, or `node api-tests/r4/proof-worker.mjs` |
+| Ack only after sending; retries; dead-letter queue | Queue checks 3 (a broken message → DLQ with `x-death`) and 4 (wrong mail password → 4 attempts → DLQ) |
+| RabbitMQ down → orders still work | Queue checks 5: `201`, the event waits in the outbox, goes out when RabbitMQ is back |
+| ⭐ Proof 2: a new order appears on the admin dashboard at once | Queue checks 6, or two browsers: admin on **Orders**, a customer orders in an InPrivate window |
+| ⭐ Proof 3: the admin's approval appears on the customer's page at once | Queue checks 7, or the customer on their order page while the admin presses **Confirm** |
+| Only the owner (or an admin) can listen | Queue checks 8: `403`, `403`, `401`, a forged signature refused by Soketi, the owner joins |
+| Soketi down → orders still work, the page reconnects | Queue checks 9 |
+
 ## If something fails
 
-- **Login returns 429:** the rate limit. Wait 1 minute.
+- **Login returns 429:** the rate limit. Wait 1 minute (the Requirement 4 scripts log in 2 or 3 times each).
 - **Orders get 503 although the inventory is running:** it was just restarted. Wait a few seconds; the app reconnects on its own.
 - **`"stock": null` for every product:** the inventory service is down. `docker compose ps`, then `docker compose start inventory`.
 - **A request sends `{{...}}` literally, or gets 401 / 404 unexpectedly:** an earlier request in the same file has not been sent yet. Send the file top to bottom.

@@ -9,6 +9,8 @@ services:
       - "3000:80"
     depends_on:
       - app
+      - soketi                   # Requirement 4: nginx forwards the WebSockets (/app/) to Soketi
+
 
   app:
     build:
@@ -23,13 +25,25 @@ services:
       # "Error: libgssapi_krb5.so.2: cannot open shared object file" on every start.
       ConnectionStrings__Default: Host=app-db;Port=5432;Database=db_online_shop;Username=admin;Password=${APP_DB_PASSWORD};GSS Encryption Mode=Disable
       Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env}
+      # Token lifetime in minutes (at most 1440 = one day). Default 60; set JWT_EXPIRY_MINUTES in .env to change it.
+      Jwt__ExpiryMinutes: ${JWT_EXPIRY_MINUTES:-60}
       Admin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL in .env}
       Admin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       # The inventory service, by its service name. gRPC over plain HTTP/2 inside the Docker network.
       Inventory__Address: http://inventory:50051
+      # Requirement 4: RabbitMQ (the outbox publishes order events there) and Soketi (live updates).
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      Realtime__AppId: ${REALTIME_APP_ID:?Set REALTIME_APP_ID in .env}
+      Realtime__Key: ${REALTIME_KEY:?Set REALTIME_KEY in .env}
+      Realtime__Secret: ${REALTIME_SECRET:?Set REALTIME_SECRET in .env}
+      Realtime__Host: soketi
+      Realtime__Port: 6001
     volumes:
       - uploads:/app/uploads     # product images survive when the container is removed
-    # No depends_on for inventory on purpose: the app must start and answer clearly even when inventory is down.
+    # No depends_on for inventory (or RabbitMQ, or Soketi) on purpose: the app must start and answer clearly even
+    # when they are down. Orders still work without RabbitMQ: their events wait in the outbox.
     depends_on:
       app-db:
         condition: service_healthy   # wait until PostgreSQL really accepts connections
@@ -78,6 +92,62 @@ services:
       timeout: 3s
       retries: 10
 
+  # Requirement 4: the message broker. The API publishes order events here; the email worker takes them.
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    # RabbitMQ keeps its data under its node name (rabbit@<hostname>). A fixed hostname means a re-created
+    # container finds its old queues and messages in the volume again.
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    ports:
+      - "15672:15672"            # the management UI: http://localhost:15672 (queues, messages, the DLQ)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq   # durable queues and persistent messages survive a restart
+      # The management UI plus the shovel plugin: it adds "Move messages", to send DLQ messages back to the queue.
+      - ./deploy/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      # Queue numbers refresh every second instead of every 5 (for the management UI and the Queue checks page).
+      - ./deploy/rabbitmq/onlineshop.conf:/etc/rabbitmq/conf.d/90-onlineshop.conf:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      
+  # Requirement 4: the worker. A separate program that sends the order confirmation emails.
+  email-worker:
+    build:
+      context: .                 # the repository root, so the Dockerfile can COPY app/Shop.Messaging too
+      dockerfile: app/Shop.EmailWorker/Dockerfile
+    environment:
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: ${RABBITMQ_USER}
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      # The external mail service (Mailtrap, Gmail, ...): only in .env, never in the code.
+      Smtp__Host: ${SMTP_HOST:?Set SMTP_HOST in .env}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__Username: ${SMTP_USERNAME:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__From: ${SMTP_FROM:?Set SMTP_FROM in .env}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  # Requirement 4: a ready-made WebSocket server that speaks the Pusher protocol (we do not write our own).
+  # The API tells it what to send (HTTP), the browsers listen to it (WebSocket, through nginx on port 3000).
+  soketi:
+    image: quay.io/soketi/soketi:1.6-16-debian
+    environment:
+      SOKETI_DEFAULT_APP_ID: ${REALTIME_APP_ID:?Set REALTIME_APP_ID in .env}
+      SOKETI_DEFAULT_APP_KEY: ${REALTIME_KEY:?Set REALTIME_KEY in .env}
+      SOKETI_DEFAULT_APP_SECRET: ${REALTIME_SECRET:?Set REALTIME_SECRET in .env}
+    ports:
+      - "6001:6001"              # only for "npm run dev" (Vite); in Docker the browser goes through nginx
+
+
+
+
   # Optional: adds the demo catalog (12 products with images) through the API.
   # Not started by "docker compose up"; run it with:  docker compose --profile seed run --rm seed
   seed:
@@ -98,3 +168,4 @@ volumes:
   app-db-data:
   uploads:
   inventory-db-data:
+  rabbitmq-data:

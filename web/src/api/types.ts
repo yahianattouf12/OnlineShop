@@ -82,6 +82,19 @@ export interface Order {
   statusHistory: { status: OrderStatus; changedAt: string }[];
 }
 
+/** Requirement 4, live event on private-admin-orders: a new order (and who placed it). */
+export interface OrderCreatedLive {
+  order: OrderSummary;
+  customerEmail: string;
+}
+
+/** Requirement 4, live event on private-order-<id>: the order's status changed. */
+export interface OrderStatusChangedLive {
+  orderId: string;
+  status: OrderStatus;
+  changedAt: string;
+}
+
 export interface OrderSummary {
   id: string;
   userId: string;

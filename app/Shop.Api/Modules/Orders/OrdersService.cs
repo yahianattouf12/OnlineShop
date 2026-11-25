@@ -2,10 +2,12 @@ using Microsoft.EntityFrameworkCore;
 using Shop.Api.Common.Auth;
 using Shop.Api.Common.Errors;
 using Shop.Api.Common.Paging;
+using Shop.Api.Common.Realtime;
 using Shop.Api.Modules.Notifications.Contracts;
 using Shop.Api.Modules.Orders.Dtos;
 using Shop.Api.Modules.Products.Contracts;
 using Shop.Api.Integrations.Inventory;
+using Shop.Messaging;
 
 namespace Shop.Api.Modules.Orders;
 
@@ -18,6 +20,7 @@ public class OrdersService
 
     private readonly INotificationService _notifications; // the Notifications module's public door
     private readonly ICurrentUser _currentUser;
+    private readonly IRealtimePublisher _realtime; // Requirement 4: live updates through Soketi
     private readonly ILogger<OrdersService> _logger;
 
     public OrdersService(
@@ -27,6 +30,7 @@ public class OrdersService
         INotificationService notifications,
         IInventoryService inventory,
         ICurrentUser currentUser,
+        IRealtimePublisher realtime,
         ILogger<OrdersService> logger)
     {
         _db = db;
@@ -35,6 +39,7 @@ public class OrdersService
         _notifications = notifications;
         _inventory = inventory;
         _currentUser = currentUser;
+        _realtime = realtime;
         _logger = logger;
     }
 
@@ -42,6 +47,9 @@ public class OrdersService
     {
         // 1. Who is ordering? From the token, never from the request.
         var userId = _currentUser.Id;
+        // Requirement 4: the confirmation email goes to this address (also from the token).
+        var email = _currentUser.Email
+            ?? throw new UnauthorizedException("Your session is from before an update. Please log in again.");
 
         // 2. Ask the Products module for names and prices. Unknown products are rejected.
         var productIds = request.Items.Select(i => i.ProductId!.Value).ToList();
@@ -87,9 +95,18 @@ public class OrdersService
         //    The order is saved only if the inventory says yes.
         await ReserveStockAsync(order);
 
-        // 5. The order, its items and its first history entry are saved in ONE transaction: all or nothing.
+        // 5. The order, its items, its first history entry AND the event for the email worker (Requirement 4)
+        //    are saved in ONE transaction: all or nothing. The event waits in the outbox until OutboxPublisher
+        //    hands it to RabbitMQ, so the customer never waits for the email.
         //    If saving fails, the stock we just reserved must go back to the inventory (compensation).
         _db.Orders.Add(order);
+        _db.OutboxMessages.Add(OutboxMessage.OrderCreated(new OrderCreatedEvent(
+            Guid.NewGuid(),
+            order.Id,
+            email,
+            order.TotalAmount,
+            order.Items.Select(i => new OrderCreatedItem(i.ProductName, i.Quantity, i.UnitPrice)).ToList(),
+            now)));
         try
         {
             await _db.SaveChangesAsync(ct);
@@ -105,6 +122,13 @@ public class OrdersService
 
         // 6. Tell the customer. Only after the order is safely saved.
         await TryNotifyAsync(userId, $"We received your order {ShortId(order.Id)} (total {order.TotalAmount:0.00}).", order.Id);
+
+        // 7. Requirement 4: the new order appears on every open admin dashboard at once.
+        await _realtime.TryPublishAsync(OrderChannels.Admin, OrderChannels.OrderCreatedEvent, new
+        {
+            Order = ToSummary(order),
+            CustomerEmail = email,
+        });
 
         return ToResponse(order);
     }
@@ -241,6 +265,14 @@ public class OrdersService
         // The notification goes to the order's owner (order.UserId), not to the admin who changed it.
         await TryNotifyAsync(order.UserId, $"Your order {ShortId(order.Id)} is now {newStatus}.", order.Id);
 
+        // Requirement 4: the customer's order page shows the new status at once (only the owner listens there).
+        await _realtime.TryPublishAsync(OrderChannels.ForOrder(order.Id), OrderChannels.StatusChangedEvent, new
+        {
+            OrderId = order.Id,
+            Status = newStatus,
+            ChangedAt = now,
+        });
+
         return ToResponse(order);
     }
 
@@ -297,6 +329,22 @@ public class OrdersService
     }
 
     /// <summary>
+    /// Requirement 4: may the caller listen to this live channel? Asked by RealtimeController before it signs
+    /// a subscription. The admin channel is for admins; an order channel uses VisibleOrders(), the same IDOR
+    /// protection as GET /orders/{id}: a customer can only listen to their own orders. Anything else: no.
+    /// </summary>
+    public async Task<bool> CanWatchChannelAsync(string channel, CancellationToken ct)
+    {
+        if (channel == OrderChannels.Admin)
+            return _currentUser.IsAdmin;
+
+        if (OrderChannels.TryGetOrderId(channel, out var orderId))
+            return await VisibleOrders().AnyAsync(o => o.Id == orderId, ct);
+
+        return false;
+    }
+
+    /// <summary>
     /// THE protection against IDOR: every read of orders starts here. A customer only ever
     /// sees rows where UserId is their own id (from the token); an admin sees everything.
     /// </summary>
@@ -337,6 +385,15 @@ public class OrdersService
         ChangedAt = at,
         ChangedByUserId = byUserId,
     };
+
+    private static OrderSummaryResponse ToSummary(Order o) => new(
+        o.Id,
+        o.UserId,
+        o.Status,
+        o.TotalAmount,
+        o.Items.Count,
+        o.Items.OrderBy(i => i.ProductName).Select(i => i.ProductId).ToList(),
+        o.CreatedAt);
 
     private static OrderResponse ToResponse(Order o) => new(
         o.Id,

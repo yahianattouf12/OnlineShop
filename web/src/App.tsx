@@ -10,6 +10,7 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { OrderDetailPage } from './pages/OrderDetailPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { PerformanceChecksPage } from './pages/PerformanceChecksPage';
+import { QueueChecksPage } from './pages/QueueChecksPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { SecurityPage } from './pages/SecurityPage';
@@ -52,6 +53,7 @@ export function App() {
         {/* Admin only: it sets the stock, and places the orders through a temporary customer it creates. */}
         <Route path="inventory-checks" element={<RequireAuth role="Admin"><InventoryChecksPage /></RequireAuth>} />
         <Route path="performance-checks" element={<RequireAuth role="Admin"><PerformanceChecksPage /></RequireAuth>} />
+        <Route path="queue-checks" element={<RequireAuth role="Admin"><QueueChecksPage /></RequireAuth>} />
         <Route path="admin/products/new" element={<RequireAuth role="Admin"><AddProductPage /></RequireAuth>} />
         <Route path="admin/users" element={<RequireAuth role="Admin"><UsersPage /></RequireAuth>} />
 

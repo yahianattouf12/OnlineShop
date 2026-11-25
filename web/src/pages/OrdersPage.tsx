@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ordersApi, usersApi } from '../api/endpoints';
-import { ORDER_STATUSES, type OrderStatus } from '../api/types';
-import { EmptyState, hideBrokenImage, PageHeader, Pagination, ProblemNotice, Segmented, StatusBadge } from '../components/ui';
+import { ORDER_STATUSES, type OrderCreatedLive, type OrderStatus } from '../api/types';
+import { useToast } from '../components/Toasts';
+import { EmptyState, hideBrokenImage, LiveBadge, PageHeader, Pagination, ProblemNotice, Segmented, StatusBadge } from '../components/ui';
 import { formatDateTime, formatMoney, shortId } from '../lib/format';
+import { useLiveChannel } from '../lib/realtime';
 import { useAsync } from '../lib/useAsync';
 
 const PAGE_SIZE = 10;
@@ -33,7 +35,21 @@ export function OrdersPage({ admin = false }: { admin?: boolean }) {
   const orders = useAsync(() => ordersApi.list({ status: status || undefined, page, pageSize: PAGE_SIZE }), [status, page]);
   // Admins see who placed each order. Users live in another module, so ask its API, not its tables.
   const users = useAsync(() => (admin ? usersApi.list() : Promise.resolve([])), [admin]);
-  const emailById = useMemo(() => new Map((users.data ?? []).map((u) => [u.id, u.email])), [users.data]);
+  const toast = useToast();
+
+  // Requirement 4: the admin dashboard listens to private-admin-orders (admins only). A new order is put at the
+  // top from the event itself, not by reloading the list: with the read replica on, the list could still be a
+  // moment behind and miss it.
+  const [fresh, setFresh] = useState<OrderCreatedLive[]>([]);
+  const live = useLiveChannel<OrderCreatedLive>(admin ? 'private-admin-orders' : null, 'order.created', (event) => {
+    setFresh((previous) => [event, ...previous.filter((e) => e.order.id !== event.order.id)]);
+    toast(`New order ${shortId(event.order.id)} from ${event.customerEmail}.`);
+  });
+
+  const emailById = useMemo(
+    () => new Map([...(users.data ?? []).map((u) => [u.id, u.email] as const), ...fresh.map((e) => [e.order.userId, e.customerEmail] as const)]),
+    [users.data, fresh],
+  );
 
   const update = (next: { status?: string; page?: number }) => {
     const search = new URLSearchParams();
@@ -44,10 +60,22 @@ export function OrdersPage({ admin = false }: { admin?: boolean }) {
   };
 
   const data = orders.data;
+  // New live orders go on top of the first page (when the filter would show a new, Pending order),
+  // unless the list already has them.
+  const showFresh = admin && page === 1 && (status === '' || status === 'Pending');
+  const freshIds = new Set(fresh.map((e) => e.order.id));
+  const rows = data
+    ? [...(showFresh ? fresh.map((e) => e.order).filter((o) => !data.items.some((i) => i.id === o.id)) : []), ...data.items]
+    : [];
   const options = [{ value: '', label: 'All' }, ...ORDER_STATUSES.map((s) => ({ value: s, label: s }))];
 
   return (
     <main className="main">
+      {admin && (
+        <div style={{ float: 'right' }}>
+          <LiveBadge live={live} />
+        </div>
+      )}
       <PageHeader
         title={admin ? 'Orders.' : 'My orders.'}
         lead={
@@ -69,7 +97,7 @@ export function OrdersPage({ admin = false }: { admin?: boolean }) {
             <div key={i} className="skeleton" style={{ height: 56 }} />
           ))}
         </div>
-      ) : data.items.length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
           icon="receipt"
           title={status ? `No ${status.toLowerCase()} orders.` : admin ? 'No orders yet.' : 'You haven’t ordered anything yet.'}
@@ -104,8 +132,8 @@ export function OrdersPage({ admin = false }: { admin?: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((o) => (
-                  <tr key={o.id} className="clickable" onClick={() => navigate(`/orders/${o.id}`)}>
+                {rows.map((o) => (
+                  <tr key={o.id} className={`clickable ${freshIds.has(o.id) ? 'row-new' : ''}`} onClick={() => navigate(`/orders/${o.id}`)}>
                     <td>
                       <Link to={`/orders/${o.id}`} className="strong mono" style={{ textDecoration: 'none' }} onClick={(e) => e.stopPropagation()}>
                         {shortId(o.id)}

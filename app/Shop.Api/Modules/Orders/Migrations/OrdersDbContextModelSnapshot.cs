@@ -121,6 +121,34 @@ namespace Shop.Api.Modules.Orders.Migrations
                     b.ToTable("OrderStatusHistory", "orders");
                 });
 
+            modelBuilder.Entity("Shop.Api.Modules.Orders.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasFilter("\"PublishedAt\" IS NULL");
+
+                    b.ToTable("OutboxMessages", "orders");
+                });
+
             modelBuilder.Entity("Shop.Api.Modules.Orders.OrderItem", b =>
                 {
                     b.HasOne("Shop.Api.Modules.Orders.Order", null)
