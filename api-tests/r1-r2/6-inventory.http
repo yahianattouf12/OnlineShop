@@ -1,7 +1,7 @@
 # 6. Requirement 2: the inventory service (Node.js) over gRPC.
 #    Stock in the product details, all-or-nothing reservation, clear refusal, and what the user
 #    sees when the inventory service is stopped. The proofs the brief asks for are marked ⭐.
-#    The race-condition proof (many orders for the last unit) is a script: node api-tests/race-last-unit.mjs
+#    The race-condition proof (many orders for the last unit) is a script: node api-tests/r1-r2/race-last-unit.mjs
 #
 # Send TOP TO BOTTOM the first time. This file logs in 2 times.
 

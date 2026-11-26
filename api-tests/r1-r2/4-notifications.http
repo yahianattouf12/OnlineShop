@@ -5,7 +5,7 @@
 # VS Code "REST Client" extension: click "Send Request" above each request.
 # Send TOP TO BOTTOM the first time: later requests reuse the responses of earlier ones.
 # This file logs in 3 times (login is limited to 5 per minute; on 429 wait a minute).
-# The admin login is read from api-tests/.env (ADMIN_EMAIL, ADMIN_PASSWORD), which git ignores.
+# The admin login is read from api-tests/r1-r2/.env (ADMIN_EMAIL, ADMIN_PASSWORD), which git ignores.
 
 @baseUrl = http://localhost:8080
 @api = {{baseUrl}}/api/v1

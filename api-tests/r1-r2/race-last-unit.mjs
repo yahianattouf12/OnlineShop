@@ -1,9 +1,9 @@
 // Requirement 2 proof: many orders at the SAME moment for the LAST unit of a product.
 // Expected: exactly ONE order succeeds (201), all the others are refused (409), and the stock ends at 0.
 //
-// Run (with "docker compose up" running):   node api-tests/race-last-unit.mjs
-// Options:                                  node api-tests/race-last-unit.mjs <number of orders, default 20>
-// The admin login (ADMIN_EMAIL, ADMIN_PASSWORD) is read from api-tests/.env, or else from the root .env.
+// Run (with "docker compose up" running):   node api-tests/r1-r2/race-last-unit.mjs
+// Options:                                  node api-tests/r1-r2/race-last-unit.mjs <number of orders, default 20>
+// The admin login (ADMIN_EMAIL, ADMIN_PASSWORD) is read from api-tests/r1-r2/.env, or else from the root .env.
 // Each run logs in twice, and login is limited to 5 per minute: on 429, wait a minute and run it again.
 
 import { readFileSync } from 'node:fs';
@@ -28,7 +28,7 @@ function readDotEnv(path) {
 }
 
 const env = {
-  ...readDotEnv(new URL('../.env', import.meta.url)),
+  ...readDotEnv(new URL('../../.env', import.meta.url)),
   ...readDotEnv(new URL('./.env', import.meta.url)),
   ...process.env,
 };
