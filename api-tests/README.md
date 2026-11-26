@@ -1,6 +1,6 @@
 # API tests: Requirements 1 to 4
 
-Ready requests that cover everything in Requirement 1, in two forms (Requirement 2 has [its own section](#requirement-2-the-inventory-service), Requirement 4 [too](#requirement-4-queues-and-live-updates); Requirement 3 is in `r3/`):
+Ready requests that cover everything in Requirement 1, in two forms (Requirement 2 has [its own section](#requirement-2-the-inventory-service), Requirement 4 [too](#requirement-4-queues-and-live-updates); Requirement 3 is in `r3/`). The Requirement 1 and 2 files are in `r1-r2/`, the later ones in `r3/` and `r4/`:
 
 - **`.http` files** for the VS Code **REST Client** extension: the quickest for a live demo. Click **Send Request** above each request.
 - **A Postman collection** with automatic checks: run it once to prove everything is green.
@@ -9,29 +9,29 @@ Ready requests that cover everything in Requirement 1, in two forms (Requirement
 
 | File | What it is |
 |---|---|
-| `0-api-rules.http` | Swagger/OpenAPI, the unified error format, the security headers |
-| `1-users-auth.http` | Register, login (JWT), the two roles |
-| `2-products.http` | Add a product with its image, list, filter by category, pagination |
-| `3-orders.http` | Create, view, change status, and the **two proofs** (⭐) |
-| `4-notifications.http` | Notified on order and status change, own notifications only (⭐), unread count, mark as read |
-| `5-rate-limit.http` | Brute-force protection on login (429) |
-| `6-inventory.http` | Requirement 2: stock in product details, all-or-nothing reservation (409), what the user sees when inventory is down (⭐) |
-| `race-last-unit.mjs` | Requirement 2 proof (⭐): many orders at the same moment for the last unit, exactly one succeeds. Run: `node api-tests/race-last-unit.mjs` |
+| `r1-r2/0-api-rules.http` | Swagger/OpenAPI, the unified error format, the security headers |
+| `r1-r2/1-users-auth.http` | Register, login (JWT), the two roles |
+| `r1-r2/2-products.http` | Add a product with its image, list, filter by category, pagination |
+| `r1-r2/3-orders.http` | Create, view, change status, and the **two proofs** (⭐) |
+| `r1-r2/4-notifications.http` | Notified on order and status change, own notifications only (⭐), unread count, mark as read |
+| `r1-r2/5-rate-limit.http` | Brute-force protection on login (429) |
+| `r1-r2/6-inventory.http` | Requirement 2: stock in product details, all-or-nothing reservation (409), what the user sees when inventory is down (⭐) |
+| `r1-r2/race-last-unit.mjs` | Requirement 2 proof (⭐): many orders at the same moment for the last unit, exactly one succeeds. Run: `node api-tests/r1-r2/race-last-unit.mjs` |
 | `r4/proof-worker.mjs` | Requirement 4 proof 1 (⭐): stops the email worker, places 3 orders, starts it again; all 3 emails are sent. Run: `node api-tests/r4/proof-worker.mjs` |
 | `r4/proof-realtime.mjs` | Requirement 4 proofs 2 and 3 (⭐): a new order reaches the admin at once, the admin's approval reaches the customer at once, and strangers cannot join the channels. Run: `node api-tests/r4/proof-realtime.mjs` |
 | `r4/r4-demo-commands.txt` | Requirement 4: the commands for the demos by hand (worker down, wrong mail password, RabbitMQ down, Soketi down) |
-| `.env.example` | Template for `.env`: the admin login that the `.http` files read |
-| `OnlineShop-R1.postman_collection.json` | All the requests for Postman, in 6 folders, with checks |
-| `OnlineShop-local.postman_environment.example.json` | Template for the Postman environment: `baseUrl` and the admin login |
-| `product.png` | A real image for adding products |
-| `not-an-image.png` | A text file renamed to `.png`, to show the upload check |
+| `r1-r2/.env.example` | Template for `r1-r2/.env`: the admin login that the `.http` files read |
+| `r1-r2/OnlineShop-R1.postman_collection.json` | All the requests for Postman, in 6 folders, with checks |
+| `r1-r2/OnlineShop-local.postman_environment.example.json` | Template for the Postman environment: `baseUrl` and the admin login |
+| `r1-r2/product.png` | A real image for adding products |
+| `r1-r2/not-an-image.png` | A text file renamed to `.png`, to show the upload check |
 
 ## One-time setup
 
 Both files below hold the admin password, so git ignores them. Use the same values as `ADMIN_EMAIL` / `ADMIN_PASSWORD` in the root `.env`.
 
-1. **For the `.http` files:** copy `.env.example` to `.env` (in this folder) and fill in the two values.
-2. **For Postman:** copy `OnlineShop-local.postman_environment.example.json` to `OnlineShop-local.postman_environment.json` and fill in `adminPassword`.
+1. **For the `.http` files:** copy `r1-r2/.env.example` to `r1-r2/.env` (next to the `.http` files: REST Client reads `.env` from the folder of the file) and fill in the two values.
+2. **For Postman:** in `r1-r2/`, copy `OnlineShop-local.postman_environment.example.json` to `OnlineShop-local.postman_environment.json` and fill in `adminPassword`.
 
 ## How the `.http` files work
 
@@ -45,12 +45,12 @@ Both files below hold the admin password, so git ignores them. Use the same valu
 1. From the project folder: `docker compose up --build -d`
 2. **Postman check:** in VS Code, open the **Postman** extension, import both JSON files, select the **OnlineShop local** environment, and run the whole collection. Everything should be green.
 3. Wait **1 minute**: the collection ends with the rate-limit test on purpose.
-4. **Live demo:** open the `.http` files in order (0 → 5).
+4. **Live demo:** open the `.http` files in `r1-r2/` in order (0 → 5).
 
 Without Postman, the same check from a terminal:
 
 ```bash
-cd api-tests
+cd api-tests/r1-r2
 npx newman run OnlineShop-R1.postman_collection.json -e OnlineShop-local.postman_environment.json
 ```
 
@@ -117,14 +117,14 @@ over gRPC, through the shared contract `proto/inventory.proto`. Every call has a
 | One reservation request for the whole order; saved only after the inventory agrees | `6-inventory.http`: "Enough stock → 201", then the stock drops |
 | Not enough stock → clear refusal | `6-inventory.http`: "⭐ Not enough stock" → `409` naming the product, with `shortages` |
 | All or nothing | `6-inventory.http`: after the `409`, the other product's stock is unchanged |
-| ⭐ Many orders for the last unit → exactly one succeeds | `node api-tests/race-last-unit.mjs 50` → `1 × 201`, `49 × 409`, stock `0`, `PASS` |
+| ⭐ Many orders for the last unit → exactly one succeeds | `node api-tests/r1-r2/race-last-unit.mjs 50` → `1 × 201`, `49 × 409`, stock `0`, `PASS` |
 | ⭐ Stop the inventory service → what the user sees | `docker compose stop inventory`, then the last section of `6-inventory.http` |
 | Slow inventory → a deadline, clear answer | `docker compose pause inventory`: the order gets `503` after 2 s. `docker compose unpause inventory` |
 | Saving fails after the reservation → the stock is given back | `app/Shop.Api/Modules/Orders/OrdersService.cs`: the `catch` around `SaveChangesAsync` calls Release |
 
 ### The two proofs the brief asks for
 
-1. **⭐ Race on the last unit:** `node api-tests/race-last-unit.mjs 50`. The script sets a product's stock to 1, then sends
+1. **⭐ Race on the last unit:** `node api-tests/r1-r2/race-last-unit.mjs 50`. The script sets a product's stock to 1, then sends
    50 orders at the same moment (`Promise.all`). Exactly one gets `201`, the other 49 get `409`, and the stock ends at `0`.
    Sequelize locks the stock row with `SELECT FOR UPDATE` before checking and deducting the quantity in the same
    transaction. A second order waits for the first to commit, then reads `quantity = 0` and reports a shortage.
@@ -134,7 +134,7 @@ over gRPC, through the shared contract `proto/inventory.proto`. Every call has a
    - `docker compose start inventory`: within a few seconds everything works again
 
 The race script logs in twice, and login is limited to 5 per minute: on `429`, wait a minute and run it again.
-It reads the admin login from `api-tests/.env`, or else from the root `.env`.
+It reads the admin login from `api-tests/r1-r2/.env`, or else from the root `.env`.
 
 ## Requirement 4: queues and live updates
 
@@ -168,5 +168,5 @@ new orders and status changes reach the browsers over WebSocket, through Soketi.
 - **Orders get 503 although the inventory is running:** it was just restarted. Wait a few seconds; the app reconnects on its own.
 - **`"stock": null` for every product:** the inventory service is down. `docker compose ps`, then `docker compose start inventory`.
 - **A request sends `{{...}}` literally, or gets 401 / 404 unexpectedly:** an earlier request in the same file has not been sent yet. Send the file top to bottom.
-- **Login admin returns 401:** the admin password in `api-tests/.env` or in the Postman environment does not match `ADMIN_PASSWORD` in the root `.env`, or the database was created with an older `.env`. Fix the value, or reset with `docker compose down -v` and `docker compose up -d`.
-- **Postman: add product returns 422 "The Image field is required":** Postman could not find the image file. The collection points to `product.png` / `not-an-image.png` relative to this folder: set this folder as Postman's working directory, or open the request's **Body** tab and re-select the file. (`newman` finds them when run from this folder.)
+- **Login admin returns 401:** the admin password in `api-tests/r1-r2/.env` or in the Postman environment does not match `ADMIN_PASSWORD` in the root `.env`, or the database was created with an older `.env`. Fix the value, or reset with `docker compose down -v` and `docker compose up -d`.
+- **Postman: add product returns 422 "The Image field is required":** Postman could not find the image file. The collection points to `product.png` / `not-an-image.png` relative to `r1-r2/`: set that folder as Postman's working directory, or open the request's **Body** tab and re-select the file. (`newman` finds them when run from `r1-r2/`.)

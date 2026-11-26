@@ -10,7 +10,7 @@ import { useAsync } from '../lib/useAsync';
 /**
  * Live proofs for Requirement 2 (the inventory service over gRPC), run from the admin account.
  * The admin sets the stock; the orders are placed by a temporary customer this page creates, exactly like
- * api-tests/race-last-unit.mjs. Every check puts the product's stock back to what it was afterwards.
+ * api-tests/r1-r2/race-last-unit.mjs. Every check puts the product's stock back to what it was afterwards.
  */
 
 interface Ctx {
@@ -362,7 +362,7 @@ export function InventoryChecksPage() {
               </>
             ) : null}
             . The race check leaves one real order, the one that got the last unit. A browser sends about 6 requests at a time to one site;
-            for {raceOrders} truly simultaneous requests, run <span className="mono">node api-tests/race-last-unit.mjs</span>.
+            for {raceOrders} truly simultaneous requests, run <span className="mono">node api-tests/r1-r2/race-last-unit.mjs</span>.
           </p>
         </div>
       )}
