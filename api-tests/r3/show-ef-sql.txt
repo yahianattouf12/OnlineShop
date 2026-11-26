@@ -3,7 +3,7 @@
 # Paste in PowerShell, from the OnlineShop folder.
 
 # 0. Once per window: the r3practice project + the $admin token
-. "D:\programming\projects\LEARNING\مشاريع سنة خامسة\فصل أول\مشروع تطبيقات الانترنت\Assets\Claude\r3-terminal.ps1"
+. .\api-tests\r3\r3-terminal.ps1
 
 
 # 1. NEW query: ListAsync (GET /orders). The page is picked FIRST (inner LIMIT/OFFSET), the items are counted AFTER (outer query).
